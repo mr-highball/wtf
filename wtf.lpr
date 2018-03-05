@@ -36,6 +36,17 @@ type
     function DoDataToJSON(const AData: TData): String; override;
   public
   end;
+
+  { TTestManager }
+  TStringManager = TModelManagerImpl<String,String>;
+  TTestManager = class(TStringManager)
+  private
+  protected
+    function InitClassifier:TClassifierImpl<TData,TClassification>;override;
+    function InitDataFeeder:TDataFeederImpl<TData>;override;
+  public
+	end;
+
 procedure TestKNN;
 (*var
   I : Integer;
@@ -126,6 +137,16 @@ end;
 var
   LPersist : TJSONPersistImpl;
   LError : String;
+
+function TTestManager.InitClassifier:TClassifierImpl<TData,TClassification>;
+begin
+  Result:=TTestClassifier.Create;
+end;
+
+function TTestManager.InitDataFeeder:TDataFeederImpl<TData>;
+begin
+  Result:=TTestFeeder.Create;
+end;
 
 function TTestFeeder.DoDataFromJSON(const AJSON: String): TData;
 var

@@ -5,7 +5,7 @@ unit wtf.core.types;
 interface
 
 uses
-  Classes, SysUtils,
+  Classes, SysUtils, Variants,
   {$IFDEF FPC}
   fgl
   {$ELSE}
@@ -219,6 +219,44 @@ type
     TGuid
     {$ENDIF};
 
+  { TClassifierPublication }
+  (*
+    events triggered by a classifier publisher
+  *)
+  TClassifierPublication = (
+    cpPreClassify,
+    cpPostClassify
+  );
+
+  { TClassifierPubPayload }
+  (*
+    payload provided to subscribers of a classifier publisher
+  *)
+  TClassifierPubPayload = record
+    PublicationType : TClassifierPublication;
+    ID : TIdentifier;
+    //a bit of a bandaid, should be of type TClassification, but fpc
+    //doesn't like this syntax...
+    //IClassificationPublisher<TClassification> = IPublisher<TClassifierPubPayload<TClassification>>
+    Classification : Variant;
+
+    //http://docwiki.embarcadero.com/RADStudio/Tokyo/en/Operator_Overloading_(Delphi)
+    class operator GreaterThan(Const a, b : TClassifierPubPayload) : Boolean;
+    class operator LessThan(Const a, b : TClassifierPubPayload) : Boolean;
+  end;
+
+  { IClassificationPublisher }
+  (*
+    a publisher of classifier payload
+  *)
+  IClassificationPublisher = IPublisher<TClassifierPubPayload>;
+
+  { IClassificationSubscriber }
+  (*
+    a subscriber to classifier payloads
+  *)
+  IClassificationSubscriber = ISubscriber<TClassifierPubPayload>;
+
   { TClassifierArray }
   (*
     A collection of classifications
@@ -233,8 +271,10 @@ type
     ['{B0C5DCB3-FB13-4307-AC8C-51BA9C5B379C}']
     //property methods
     function GetSupportedClassifiers : TClassifierArray;
+    function GetPublisher : IClassificationPublisher;
     //properties
     property SupportedClassifiers : TClassifierArray read GetSupportedClassifiers;
+    property Publisher : IClassificationPublisher read GetPublisher;
     //methods
     function Classify(Const ARepository:TDataRepository<TData>;
       Out Classification:TClassification) : TIdentifier;
@@ -303,6 +343,18 @@ type
   end;
 
 implementation
+
+{ TClassifierPubPayload }
+
+class operator TClassifierPubPayload.GreaterThan(Const a, b : TClassifierPubPayload) : Boolean;
+begin
+  Result:=Ord(a.PublicationType) > Ord(b.PublicationType);
+end;
+
+class operator TClassifierPubPayload.LessThan(Const a, b : TClassifierPubPayload) : Boolean;
+begin
+  Result:=Ord(a.PublicationType) < Ord(b.PublicationType);
+end;
 
 { TModels }
 

@@ -15,7 +15,9 @@ type
   TClassifierImpl<TData,TClassification> = class(TInterfacedObject,IClassifier<TData,TClassification>)
   private
     FSupported : TClassifierArray<TClassification>;
+    FPublisher : IClassificationPublisher;
     function GetSupportedClassifiers : TClassifierArray<TClassification>;
+    function GetPublisher : IClassificationPublisher;
   protected
     //children classes will need to override below methods
     function DoGetSupportedClassifiers : TClassifierArray<TClassification>;virtual;abstract;
@@ -23,6 +25,7 @@ type
   public
     //properties
     property SupportedClassifiers : TClassifierArray read GetSupportedClassifiers;
+    property Publisher : IClassificationPublisher read GetPublisher;
     //methods
     function Classify(Const ARepository:TDataRepository<TData>;
       Out Classification:TClassification) : TIdentifier;
@@ -31,16 +34,32 @@ type
   end;
 
 implementation
+uses
+  wtf.core.publisher;
 
 { TClassifierImpl }
 
+function TClassifierImpl<TData,TClassification>.GetPublisher : IClassificationPublisher;
+begin
+  Result:=FPublisher;
+end;
+
 function TClassifierImpl<TData,TClassification>.Classify(Const ARepository:TDataRepository<TData>;
   Out Classification:TClassification) : TIdentifier;
+var
+  LMessage : TClassifierPubPayload;
 begin
   Result:=TGuid.NewGuid;
+  //after generating an identifier, notify subscribers (nil being assigned to classification)
+  LMessage.PublicationType:=cpPreClassify;
+  LMessage.ID:=Result;
+  LMessage.Classification:=nil;
+  Publisher.Notify(LMessage);
   Classification:=DoClassify(ARepository);
-  //on a successful classification, do we want to store the classifaction
-  //with the id? or should this be the responsible of the caller?
+  //now notify subscribers after we have classified
+  LMessage.PublicationType:=cpPostClassify;
+  LMessage.Classification:=Classification;
+  Publisher.Notify(LMessage);
 end;
 
 function TClassifierImpl<TData,TClassification>.GetSupportedClassifiers: TClassifierArray<TClassification>;
@@ -51,11 +70,13 @@ end;
 constructor TClassifierImpl<TData,TClassification>.Create;
 begin
   FSupported:=DoGetSupportedClassifiers;
+  FPublisher:=TPublisherImpl<TClassifierPubPayload>.Create;
 end;
 
 destructor TClassifierImpl<TData,TClassification>.Destroy;
 begin
   SetLength(FSupported,0);
+  FPublisher:=nil;
   inherited Destroy;
 end;
 
