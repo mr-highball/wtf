@@ -162,7 +162,9 @@ type
     fpPreDataFromJSON,
     fpPostDataFromJSON,
     fpPreFeed,
-    fpPostFeed
+    fpPostFeed,
+    fpPreClear,
+    fpPostClear
   );
 
   { IDataFeederPublisher }
@@ -225,6 +227,7 @@ type
   *)
   TClassifierPublication = (
     cpPreClassify,
+    cpAlterClassify,
     cpPostClassify
   );
 

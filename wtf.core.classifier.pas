@@ -48,6 +48,7 @@ function TClassifierImpl<TData,TClassification>.Classify(Const ARepository:TData
   Out Classification:TClassification) : TIdentifier;
 var
   LMessage : TClassifierPubPayload;
+  LClassification : TClassification;
 begin
   Result:=TGuid.NewGuid;
   //after generating an identifier, notify subscribers (nil being assigned to classification)
@@ -56,6 +57,16 @@ begin
   LMessage.Classification:=nil;
   Publisher.Notify(LMessage);
   Classification:=DoClassify(ARepository);
+  //for anyone subscribers of this next message, we give them the oppurtunity
+  //to change the classification if they would like
+  LClassification:=Classification;
+  LMessage.PublicationType:=cpAlterClassify;
+  LMessage.Classification:=LClassification;
+  Publisher.Notify(LMessage);
+  //if we our classification is different than the one passed to alter, we
+  //will go with what subscribers state
+  if LMessage.Classification<>Classification then
+    Classification:=LMessage.Classification;
   //now notify subscribers after we have classified
   LMessage.PublicationType:=cpPostClassify;
   LMessage.Classification:=Classification;

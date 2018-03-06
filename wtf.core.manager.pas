@@ -6,23 +6,67 @@ interface
 
 uses
   Classes, SysUtils, wtf.core.types, wtf.core.feeder, wtf.core.classifier,
-  wtf.core.persist;
+  wtf.core.persist,
+  {$IFDEF FPC}
+  fgl
+  {$ELSE}
+  System.Generics.Collections
+  {$ENDIF};
 
 type
+
+  { TVoteEntry }
+  (*
+    used by model manager to keep track of votes
+  *)
+  TVoteEntry<TData,TClassification> = class
+  private
+    FModel : IModel<TData,TClassification>;
+    FID : TIdentifier;
+    FClassification : TClassification;
+  public
+    property ID : TIdentifier read FID;
+    property Model : IModel<TData,TClassification> read FModel;
+    property Classification : TClassification read FClassification;
+    constructor Create(Const AModel : IModel<TData,TClassification>;
+      Const AIdentifier : TIdentifier; Const AClassification : TClassification);
+    destructor Destroy; override;
+  end;
+
   { TModelManagerImpl }
   (*
     Base implementation of the IModelManager interface
   *)
   TModelManagerImpl<TData,TClassification> = class(TPersistableImpl,IModelManager<TData,TClassification>)
   private
+    type
+      TSpecializedVoteEntry = TVoteEntry<TData,TClassification>;
+      TVoteEntries =
+        {$IFDEF FPC}
+        TFPGObjectList<TSpecializedVoteEntry>;
+        {$ELSE}
+        TObjectList<TSpecializedVoteEntry>;
+        {$ENDIF}
+      //to avoid having to overload comparison operators for TIdentifer
+      //use string as the key and do a guid.tostring when looking
+      TVoteMap =
+        {$IFDEF FPC}
+        TFPGMapObject<String,TVoteEntries>;
+        {$ELSE}
+        //delphi dictionary should be able to handle guid as key
+        TObjectDictionary<TIdentifier,TSpecializedVoteEntry>;
+        {$ENDIF}
+  private
     FModels : TModels<TData,TClassification>;
     FDataFeeder : IDataFeeder<TData>;
     FClassifier : IClassifier<TData,TClassification>;
     FDataFeederSubscriber : IDataFeederSubscriber;
+    FVoteMap : TVoteMap;
     function GetModels: TModels<TData,TClassification>;
     function GetDataFeeder : IDataFeeder<TData>;
     function GetClassifier : IClassifier<TData,TClassification>;
     procedure RedirectData(Const AMessage:TDataFeederPublication);
+    procedure RedirectClassification(Const AMessage:TClassifierPubPayload);
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
@@ -50,17 +94,54 @@ implementation
 uses
   wtf.core.subscriber;
 
+{ TVoteEntry }
+
+constructor TVoteEntry<TData,TClassification>.Create(
+  Const AModel : IModel<TData,TClassification>;
+  Const AIdentifier : TIdentifier; Const AClassification : TClassification);
+begin
+  inherited Create;
+  FModel:=AModel;
+  FID:=AIdentifier;
+  FClassification:=AClassification;
+end;
+
+destructor TVoteEntry<TData,TClassification>.Destroy;
+begin
+  FModel:=nil;
+  inherited Destroy;
+end;
+
 { TModelManagerImpl }
+
+procedure TModelManagerImpl<TData,TClassification>.RedirectClassification(Const AMessage:TClassifierPubPayload);
+var
+  LEntry:TVoteEntries;
+begin
+  //when someone wants to classify, we need to grab out identifier as the
+  //key to a "batch" of classifications
+  if AMessage.PublicationType=cpPreClassify then
+  begin
+    LEntry:=TVoteEntries.Create(True);
+    //capture the identifier our classifier generated and use it as a key
+    FVoteMap.Add(AMessage.ID.ToString,LEntry);
+  end
+  else if AMessage.PublicationType=cpAlterClassify then
+  begin
+    //regardless of whatever the initialized classifier spits out as default
+    //we will change it to be the aggregate response for our identifier
+  end;
+end;
 
 procedure TModelManagerImpl<TData,TClassification>.RedirectData(Const AMessage:TDataFeederPublication);
 var
   LData : TData;
   I : Integer;
 begin
-  if FModels.Collection.Count<=0 then
-    Exit;
   if AMessage=fpPostFeed then
   begin
+    if FModels.Collection.Count<=0 then
+      Exit;
     //redirect the last entered data to all models
     LData:=FDataFeeder[Pred(FDataFeeder.Count)];
     for I:=0 to Pred(FModels.Collection.Count) do
@@ -68,6 +149,12 @@ begin
     //we don't need to hold any data, let the models do this
     FDataFeeder.Clear;
 	end;
+  //on a clear, we need to get rid of any tracking info, and clear our own feeder
+  if AMessage=fpPostClear then
+  begin
+    FVoteMap.Clear;
+    FDataFeeder.Clear;
+  end;
 end;
 
 procedure TModelManagerImpl<TData,TClassification>.DoPersist;
@@ -107,7 +194,7 @@ function TModelManagerImpl<TData,TClassification>.ProvideFeedback(Const ACorrect
   Const AIdentifer:TIdentifier; Out Error:String):Boolean;
 begin
   Result:=False;
-  { TODO 4 : iterate all models and get there feedback }
+  { TODO 4 : look in vote map for id, and reward those that were successful }
 end;
 
 constructor TModelManagerImpl<TData,TClassification>.Create;
@@ -118,6 +205,7 @@ begin
   FDataFeederSubscriber.OnNotify:=RedirectData;
   FClassifier:=InitClassifier;
   FModels:=TModels<TData,TClassification>.Create;
+  FVoteMap:=TVoteMap.Create(True);
 end;
 
 destructor TModelManagerImpl<TData,TClassification>.Destroy;
@@ -126,6 +214,7 @@ begin
   FDataFeederSubscriber:=nil;
   FClassifier:=nil;
   FModels.Free;
+  FVoteMap.Free;
   inherited Destroy;
 end;
 

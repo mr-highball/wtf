@@ -86,6 +86,7 @@ var
   I:Integer;
 begin
   I:=0;
+  Publisher.Notify(fpPreClear);
   //can clear without worrying about sorting if requested amount is higher
   if (AAmount=0) or (AAmount>=FData.Count) then
     FData.Clear
@@ -114,6 +115,7 @@ begin
       Inc(I);
     end;
   end;
+  Publisher.Notify(fpPostClear);
 end;
 
 function TDataFeederImpl<TData>.GetItem(Const AIndex : Cardinal) : TData;

@@ -242,6 +242,7 @@ begin
       LError
     );
     WriteLn(LPersist.ToJson);
+    TestKNN;
     TestFeeder;
     TestPublisher;
     TestPersistable;

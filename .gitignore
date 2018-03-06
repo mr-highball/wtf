@@ -68,3 +68,9 @@ __recovery/
 *.compiled
 *.lps
 *.trc
+*.bak
+
+
+#lazarus auto-generated
+backup/
+lib/
