@@ -67,3 +67,4 @@ __recovery/
 *.ppu
 *.compiled
 *.lps
+*.trc
