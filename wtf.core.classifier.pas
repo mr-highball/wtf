@@ -16,8 +16,10 @@ type
   private
     FSupported : TClassifierArray<TClassification>;
     FPublisher : IClassificationPublisher;
+    FFeeder : IDataFeeder<TData>;
     function GetSupportedClassifiers : TClassifierArray<TClassification>;
     function GetPublisher : IClassificationPublisher;
+    function GetDataFeeder : IDataFeeder<TData>;
   protected
     //children classes will need to override below methods
     function DoGetSupportedClassifiers : TClassifierArray<TClassification>;virtual;abstract;
@@ -26,10 +28,10 @@ type
     //properties
     property SupportedClassifiers : TClassifierArray read GetSupportedClassifiers;
     property Publisher : IClassificationPublisher read GetPublisher;
+    property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     //methods
-    function Classify(Const ARepository:TDataRepository<TData>;
-      Out Classification:TClassification) : TIdentifier;
-    constructor Create;virtual;
+    function Classify(Out Classification:TClassification) : TIdentifier;
+    constructor Create(Const AFeeder : IDataFeeder<TData>);virtual;
     destructor Destroy;override;
   end;
 
@@ -39,13 +41,17 @@ uses
 
 { TClassifierImpl }
 
+function TClassifierImpl<TData,TClassification>.GetDataFeeder : IDataFeeder<TData>;
+begin
+  Result:=FFeeder;
+end;
+
 function TClassifierImpl<TData,TClassification>.GetPublisher : IClassificationPublisher;
 begin
   Result:=FPublisher;
 end;
 
-function TClassifierImpl<TData,TClassification>.Classify(Const ARepository:TDataRepository<TData>;
-  Out Classification:TClassification) : TIdentifier;
+function TClassifierImpl<TData,TClassification>.Classify(Out Classification:TClassification) : TIdentifier;
 var
   LMessage : TClassifierPubPayload;
   LClassification : TClassification;
@@ -56,7 +62,7 @@ begin
   LMessage.ID:=Result;
   LMessage.Classification:=nil;
   Publisher.Notify(LMessage);
-  Classification:=DoClassify(ARepository);
+  Classification:=DoClassify(FFeeder.DataRepository);
   //for anyone subscribers of this next message, we give them the oppurtunity
   //to change the classification if they would like
   LClassification:=Classification;
@@ -78,16 +84,18 @@ begin
   Result:=DoGetSupportedClassifiers;
 end;
 
-constructor TClassifierImpl<TData,TClassification>.Create;
+constructor TClassifierImpl<TData,TClassification>.Create(Const AFeeder : IDataFeeder<TData>);
 begin
   FSupported:=DoGetSupportedClassifiers;
   FPublisher:=TPublisherImpl<TClassifierPubPayload>.Create;
+  FFeeder:=AFeeder;
 end;
 
 destructor TClassifierImpl<TData,TClassification>.Destroy;
 begin
   SetLength(FSupported,0);
   FPublisher:=nil;
+  FFeeder:=nil;
   inherited Destroy;
 end;
 

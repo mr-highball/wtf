@@ -275,14 +275,19 @@ type
     //property methods
     function GetSupportedClassifiers : TClassifierArray;
     function GetPublisher : IClassificationPublisher;
+    function GetDataFeeder : IDataFeeder<TData>;
     //properties
     property SupportedClassifiers : TClassifierArray read GetSupportedClassifiers;
     property Publisher : IClassificationPublisher read GetPublisher;
+    property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     //methods
-    function Classify(Const ARepository:TDataRepository<TData>;
-      Out Classification:TClassification) : TIdentifier;
+    function Classify(Out Classification:TClassification) : TIdentifier;
   end;
-
+  { TODO 1 : dependency needs resolving, right now a classifier needs the datafeeder, but
+	  we originally abstracted this so a classifier only is classifying.. then how do we feed
+	  data with separate implementations? either remove feeder property from classifier
+	  and use a impl object that realizes both itherfaces, or come up with a way to get
+	  these two implementations to talk to eachother...do it }
   { IModel }
   (*
     A model is fed data through its data feeder, and then can

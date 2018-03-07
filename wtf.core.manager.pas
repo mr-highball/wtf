@@ -70,7 +70,7 @@ type
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
-    function InitClassifier : TClassifierImpl<TData,TClassification>;virtual;abstract;
+    function InitClassifier(Const AFeeder : IDataFeeder<TData>) : TClassifierImpl<TData,TClassification>;virtual;abstract;
     procedure DoPersist;override;
     procedure DoReload;override;
   public
@@ -114,11 +114,13 @@ end;
 
 { TModelManagerImpl }
 
-procedure TModelManagerImpl<TData,TClassification>.RedirectClassification(Const AMessage:TClassifierPubPayload);
+procedure TModelManagerImpl<TData,TClassification>.RedirectClassification(
+  Const AMessage:TClassifierPubPayload);
 var
   LEntry:TVoteEntries;
+  I:Integer;
 begin
-  //when someone wants to classify, we need to grab out identifier as the
+  //when someone wants to classify, we need to grab the identifier as the
   //key to a "batch" of classifications
   if AMessage.PublicationType=cpPreClassify then
   begin
@@ -128,12 +130,21 @@ begin
   end
   else if AMessage.PublicationType=cpAlterClassify then
   begin
+    //need to make sure we still have the identifier
+    if not FVoteMap.Find(AMessage.ID.ToString, I) then
+      Exit;
+    LEntry:=FVoteMap.Data[I];
     //regardless of whatever the initialized classifier spits out as default
     //we will change it to be the aggregate response for our identifier
+    for I:=0 to High(Models.Collection.Count) do
+    begin
+      //Models.Collection[I].Classify..
+    end;
   end;
 end;
 
-procedure TModelManagerImpl<TData,TClassification>.RedirectData(Const AMessage:TDataFeederPublication);
+procedure TModelManagerImpl<TData,TClassification>.RedirectData(
+  Const AMessage:TDataFeederPublication);
 var
   LData : TData;
   I : Integer;
@@ -184,13 +195,15 @@ begin
   Result:=FClassifier;
 end;
 
-function TModelManagerImpl<TData,TClassification>.ProvideFeedback(Const ACorrectClassification:TClassification;
+function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
+  Const ACorrectClassification:TClassification;
   Const AIdentifer:TIdentifier):Boolean;
 begin
   Result:=ProvideFeedback(ACorrectClassification,AIdentifer);
 end;
 
-function TModelManagerImpl<TData,TClassification>.ProvideFeedback(Const ACorrectClassification:TClassification;
+function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
+  Const ACorrectClassification:TClassification;
   Const AIdentifer:TIdentifier; Out Error:String):Boolean;
 begin
   Result:=False;
@@ -203,7 +216,7 @@ begin
   FDataFeeder:=InitDataFeeder;
   FDataFeederSubscriber:=TSubscriberImpl<TDataFeederPublication>.Create;
   FDataFeederSubscriber.OnNotify:=RedirectData;
-  FClassifier:=InitClassifier;
+  FClassifier:=InitClassifier(FDataFeeder);
   FModels:=TModels<TData,TClassification>.Create;
   FVoteMap:=TVoteMap.Create(True);
 end;

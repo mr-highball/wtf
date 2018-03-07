@@ -42,7 +42,7 @@ type
   TTestManager = class(TStringManager)
   private
   protected
-    function InitClassifier:TClassifierImpl<TData,TClassification>;override;
+    function InitClassifier(Const AFeeder : IDataFeeder<TData>):TClassifierImpl<TData,TClassification>;override;
     function InitDataFeeder:TDataFeederImpl<TData>;override;
   public
 	end;
@@ -138,9 +138,9 @@ var
   LPersist : TJSONPersistImpl;
   LError : String;
 
-function TTestManager.InitClassifier:TClassifierImpl<TData,TClassification>;
+function TTestManager.InitClassifier(Const AFeeder : IDataFeeder<TData>):TClassifierImpl<TData,TClassification>;
 begin
-  Result:=TTestClassifier.Create;
+  Result:=TTestClassifier.Create(AFeeder);
 end;
 
 function TTestManager.InitDataFeeder:TDataFeederImpl<TData>;
@@ -213,13 +213,14 @@ procedure TestClassifier;
 var
   //string data, and string classification
   LClass : IClassifier<String,String>;
-  LRepo : TDataRepository<String>;
+  LFeeder : IDataFeeder<String>;
   LClassification : String;
   LIdentifier : TIdentifier;
 begin
-  LRepo:=TDataRepository<String>.Create('');
-  LClass:=TTestClassifier.Create;
-  LIdentifier:=LClass.Classify(LRepo,LClassification);
+  LFeeder:=TTestFeeder.Create;
+  LFeeder.Feed('');
+  LClass:=TTestClassifier.Create(LFeeder);
+  LIdentifier:=LClass.Classify(LClassification);
   WriteLn('testing classify ID:'+LIdentifier.ToString(False)+' classification:'+LClassification);
 end;
 

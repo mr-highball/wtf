@@ -178,8 +178,6 @@ begin
         LObj:=TJSONObject(LData);
         for I:=0 to Pred(LObj.Count) do
         begin
-          //grab raw string value
-          LPair.Value:=LObj.Items[I].AsString;
           case LObj.Items[I].JSONType of
             jtArray: LPair.PersistType:=ptArray;
             jtBoolean: LPair.PersistType:=ptBool;
@@ -189,6 +187,8 @@ begin
             else
               Continue;
           end;
+          //grab raw string value
+          LPair.Value:=LObj.Items[I].AsString;
           FMap.Add(LObj.Names[I],LPair);
         end;
       end;
