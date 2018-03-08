@@ -17,10 +17,10 @@ type
   private
     FClassifier : IClassifier<TData,TClassification>;
     FDataFeeder : IDataFeeder<TData>;
-    function GetClassifier: IClassifier;
+    function GetClassifier: IClassifier<TData,TClassification>;
     function GetDataFeeder:IDataFeeder<TData>;
   protected
-    function InitClassifier : TClassifierImpl;virtual;abstract;
+    function InitClassifier : TClassifierImpl<TData,TClassification>;virtual;abstract;
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
     procedure DoPersist;override;
   public
@@ -52,7 +52,7 @@ begin
     Exit; //todo - log errors
 end;
 
-function TModelImpl<TData,TClassification>.GetClassifier: IClassifier;
+function TModelImpl<TData,TClassification>.GetClassifier: IClassifier<TData,TClassification>;
 begin
   Result:=FClassifier;
 end;
@@ -63,10 +63,14 @@ begin
 end;
 
 constructor TModelImpl<TData,TClassification>.Create;
+var
+  LClassImpl:TClassifierImpl<TData,TClassification>;
 begin
   inherited Create;
   FDataFeeder:=InitDataFeeder;
-  FClassifier:=InitClassifier;
+  LClassImpl:=InitClassifier;
+  LClassImpl.UpdateDataFeeder(FDataFeeder);
+  FClassifier:=LClassImpl;
 end;
 
 destructor TModelImpl<TData,TClassification>.Destroy;

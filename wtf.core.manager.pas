@@ -61,7 +61,10 @@ type
     FDataFeeder : IDataFeeder<TData>;
     FClassifier : IClassifier<TData,TClassification>;
     FDataFeederSubscriber : IDataFeederSubscriber;
+    FClassifierSubscriber : IClassificationSubscriber;
     FVoteMap : TVoteMap;
+    FPreClass : TClassifierPubPayload;
+    FAlterClass : TClassifierPubPayload;
     function GetModels: TModels<TData,TClassification>;
     function GetDataFeeder : IDataFeeder<TData>;
     function GetClassifier : IClassifier<TData,TClassification>;
@@ -157,8 +160,12 @@ begin
     LData:=FDataFeeder[Pred(FDataFeeder.Count)];
     for I:=0 to Pred(FModels.Collection.Count) do
       FModels.Collection[I].DataFeeder.Feed(LData);
+    //before internal clearing, unsubscribe first
+    FDataFeeder.Publisher.Remove(FDataFeederSubscriber,fpPostClear);
     //we don't need to hold any data, let the models do this
     FDataFeeder.Clear;
+    //re-subscribe to clear for user activated clears
+    FDataFeeder.Publisher.Subscribe(FDataFeederSubscriber,fpPostClear);
 	end;
   //on a clear, we need to get rid of any tracking info, and clear our own feeder
   if AMessage=fpPostClear then
@@ -214,9 +221,20 @@ constructor TModelManagerImpl<TData,TClassification>.Create;
 begin
   inherited Create;
   FDataFeeder:=InitDataFeeder;
+  //subscribe to feeder
   FDataFeederSubscriber:=TSubscriberImpl<TDataFeederPublication>.Create;
   FDataFeederSubscriber.OnNotify:=RedirectData;
+  FDataFeeder.Publisher.Subscribe(FDataFeederSubscriber,fpPostFeed);
+  FDataFeeder.Publisher.Subscribe(FDataFeederSubscriber,fpPostClear);
+  //subscribe to classifier, for ease just create some records privately
+  //to use in case we have to un-sub later
+  FPreClass.PublicationType:=cpPreClassify;
+  FAlterClass.PublicationType:=cpAlterClassify;
   FClassifier:=InitClassifier(FDataFeeder);
+  FClassifierSubscriber:=TSubscriberImpl<TClassifierPubPayload>.Create;
+  FClassifierSubscriber.OnNotify:=RedirectClassification;
+  FClassifier.Publisher.Subscribe(FClassifierSubscriber,FPreClass);
+  FClassifier.Publisher.Subscribe(FClassifierSubscriber,FAlterClass);
   FModels:=TModels<TData,TClassification>.Create;
   FVoteMap:=TVoteMap.Create(True);
 end;
@@ -226,6 +244,7 @@ begin
   FDataFeeder:=nil;
   FDataFeederSubscriber:=nil;
   FClassifier:=nil;
+  FClassifierSubscriber:=nil;
   FModels.Free;
   FVoteMap.Free;
   inherited Destroy;

@@ -2,7 +2,7 @@ program wtf;
 
 {$i wtf.inc}
 
-uses heaptrc, Classes, SysUtils, wtf.core, wtf.core.persist, wtf.core.logging,
+uses Classes, SysUtils, wtf.core, wtf.core.persist, wtf.core.logging,
   wtf.algorithms.knn, wtf.algorithms.utils, wtf.core.types,
   wtf.core.feeder, wtf.core.model, wtf.core.manager, wtf.core.subscriber,
   wtf.core.publisher, wtf.core.consts, wtf.core.classifier;
@@ -43,6 +43,16 @@ type
   private
   protected
     function InitClassifier(Const AFeeder : IDataFeeder<TData>):TClassifierImpl<TData,TClassification>;override;
+    function InitDataFeeder:TDataFeederImpl<TData>;override;
+  public
+	end;
+
+  { TTestModel }
+  TStringModel = TModelImpl<String,String>;
+  TTestModel = class(TStringModel)
+  private
+  protected
+    function InitClassifier:TClassifierImpl<TData,TClassification>;override;
     function InitDataFeeder:TDataFeederImpl<TData>;override;
   public
 	end;
@@ -134,9 +144,15 @@ begin
   LPub.Notify('test');
 end;
 
-var
-  LPersist : TJSONPersistImpl;
-  LError : String;
+function TTestModel.InitClassifier:TClassifierImpl<TData,TClassification>;
+begin
+  Result:=TTestClassifier.Create;
+end;
+
+function TTestModel.InitDataFeeder:TDataFeederImpl<TData>;
+begin
+  Result:=TTestFeeder.Create;
+end;
 
 function TTestManager.InitClassifier(Const AFeeder : IDataFeeder<TData>):TClassifierImpl<TData,TClassification>;
 begin
@@ -224,6 +240,42 @@ begin
   WriteLn('testing classify ID:'+LIdentifier.ToString(False)+' classification:'+LClassification);
 end;
 
+procedure TestModel;
+var
+  LModel:IModel<String,String>;
+  LClassification:String;
+  LID:TIdentifier;
+begin
+  LModel:=TTestModel.Create;
+  LModel.DataFeeder.Feed('test model');
+  LID:=LModel.Classifier.Classify(LClassification);
+  WriteLn('testing model class: ',LClassification,' ID: ',LID.ToString);
+end;
+
+procedure TestManager;
+var
+  LManager:IModelManager<String,String>;
+  LModel:IModel<String,String>;
+  LID:TIdentifier;
+  LClassification:String;
+begin
+  LManager:=TTestManager.Create;
+  LModel:=TTestModel.Create;
+  //add our model to the collection
+  LManager.Models.Collection.Add(LModel);
+  //feed data to the manager (this should get propagated down to model)
+  LManager.DataFeeder.Feed('test1');
+  LManager.DataFeeder.Feed('test2');
+  //classify via manager, which should aggregate models for their classifications
+  LID:=LManager.Classifier.Classify(LClassification);
+  //now provide some arbitrary feedback which should 'weight' the model
+  if not LManager.ProvideFeedback('test',LID) then
+    WriteLn('provide feedback failed');
+end;
+
+var
+  LPersist : TJSONPersistImpl;
+  LError : String;
 begin
   {$IFDEF DEBUG}
   SetHeapTraceOutput('intfExample.trc');
@@ -242,12 +294,14 @@ begin
       ptNumber,
       LError
     );
-    WriteLn(LPersist.ToJson);
+    (*WriteLn(LPersist.ToJson);
     TestKNN;
     TestFeeder;
     TestPublisher;
     TestPersistable;
     TestClassifier;
+    TestModel;*)
+    TestManager;
     ReadLn();
   finally
     LPersist.Free;

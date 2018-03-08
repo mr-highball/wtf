@@ -19,7 +19,6 @@ type
     FFeeder : IDataFeeder<TData>;
     function GetSupportedClassifiers : TClassifierArray<TClassification>;
     function GetPublisher : IClassificationPublisher;
-    function GetDataFeeder : IDataFeeder<TData>;
   protected
     //children classes will need to override below methods
     function DoGetSupportedClassifiers : TClassifierArray<TClassification>;virtual;abstract;
@@ -28,22 +27,25 @@ type
     //properties
     property SupportedClassifiers : TClassifierArray read GetSupportedClassifiers;
     property Publisher : IClassificationPublisher read GetPublisher;
-    property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     //methods
+    procedure UpdateDataFeeder(Const ADataFeeder : IDataFeeder<TData>);
     function Classify(Out Classification:TClassification) : TIdentifier;
-    constructor Create(Const AFeeder : IDataFeeder<TData>);virtual;
+    constructor Create(Const AFeeder : IDataFeeder<TData>);virtual;overload;
+    constructor Create;overload;
     destructor Destroy;override;
   end;
 
 implementation
 uses
-  wtf.core.publisher;
+  wtf.core.publisher, wtf.core.feeder;
 
 { TClassifierImpl }
 
-function TClassifierImpl<TData,TClassification>.GetDataFeeder : IDataFeeder<TData>;
+procedure TClassifierImpl<TData,TClassification>.UpdateDataFeeder(Const ADataFeeder : IDataFeeder<TData>);
 begin
-  Result:=FFeeder;
+  //if we had a reference, release it
+  FFeeder:=nil;
+  FFeeder:=ADataFeeder;
 end;
 
 function TClassifierImpl<TData,TClassification>.GetPublisher : IClassificationPublisher;
@@ -84,11 +86,17 @@ begin
   Result:=DoGetSupportedClassifiers;
 end;
 
+constructor TClassifierImpl<TData,TClassification>.Create;
+begin
+  inherited Create;
+  Create(nil);
+end;
+
 constructor TClassifierImpl<TData,TClassification>.Create(Const AFeeder : IDataFeeder<TData>);
 begin
   FSupported:=DoGetSupportedClassifiers;
   FPublisher:=TPublisherImpl<TClassifierPubPayload>.Create;
-  FFeeder:=AFeeder;
+  UpdateDataFeeder(AFeeder);
 end;
 
 destructor TClassifierImpl<TData,TClassification>.Destroy;

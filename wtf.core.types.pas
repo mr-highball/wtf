@@ -244,6 +244,7 @@ type
     Classification : Variant;
 
     //http://docwiki.embarcadero.com/RADStudio/Tokyo/en/Operator_Overloading_(Delphi)
+    class operator Equal(Const a, b : TClassifierPubPayload) : Boolean;
     class operator GreaterThan(Const a, b : TClassifierPubPayload) : Boolean;
     class operator LessThan(Const a, b : TClassifierPubPayload) : Boolean;
   end;
@@ -268,26 +269,20 @@ type
 
   { IClassifier }
   (*
-    A classifier can classify something as a string
+    A classifier can classify something
   *)
   IClassifier<TData,TClassification> = interface(IInterface)
     ['{B0C5DCB3-FB13-4307-AC8C-51BA9C5B379C}']
     //property methods
     function GetSupportedClassifiers : TClassifierArray;
     function GetPublisher : IClassificationPublisher;
-    function GetDataFeeder : IDataFeeder<TData>;
     //properties
     property SupportedClassifiers : TClassifierArray read GetSupportedClassifiers;
     property Publisher : IClassificationPublisher read GetPublisher;
-    property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     //methods
     function Classify(Out Classification:TClassification) : TIdentifier;
   end;
-  { TODO 1 : dependency needs resolving, right now a classifier needs the datafeeder, but
-	  we originally abstracted this so a classifier only is classifying.. then how do we feed
-	  data with separate implementations? either remove feeder property from classifier
-	  and use a impl object that realizes both itherfaces, or come up with a way to get
-	  these two implementations to talk to eachother...do it }
+
   { IModel }
   (*
     A model is fed data through its data feeder, and then can
@@ -353,6 +348,11 @@ type
 implementation
 
 { TClassifierPubPayload }
+
+class operator TClassifierPubPayload.Equal(Const a, b : TClassifierPubPayload) : Boolean;
+begin
+  Result:=Ord(a.PublicationType) = Ord(b.PublicationType);
+end;
 
 class operator TClassifierPubPayload.GreaterThan(Const a, b : TClassifierPubPayload) : Boolean;
 begin
