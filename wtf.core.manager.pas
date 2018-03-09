@@ -73,7 +73,7 @@ type
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
-    function InitClassifier(Const AFeeder : IDataFeeder<TData>) : TClassifierImpl<TData,TClassification>;virtual;abstract;
+    function InitClassifier : TClassifierImpl<TData,TClassification>;virtual;abstract;
     procedure DoPersist;override;
     procedure DoReload;override;
   public
@@ -133,6 +133,8 @@ begin
   end
   else if AMessage.PublicationType=cpAlterClassify then
   begin
+    if not FVoteMap.Sorted then
+      FVoteMap.Sorted:=True;
     //need to make sure we still have the identifier
     if not FVoteMap.Find(AMessage.ID.ToString, I) then
       Exit;
@@ -141,7 +143,7 @@ begin
     //we will change it to be the aggregate response for our identifier
     for I:=0 to High(Models.Collection.Count) do
     begin
-      //Models.Collection[I].Classify..
+      //Models.Collection[I].Classify(
     end;
   end;
 end;
@@ -205,8 +207,10 @@ end;
 function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
   Const ACorrectClassification:TClassification;
   Const AIdentifer:TIdentifier):Boolean;
+Var
+  LError:String;
 begin
-  Result:=ProvideFeedback(ACorrectClassification,AIdentifer);
+  Result:=ProvideFeedback(ACorrectClassification,AIdentifer,LError);
 end;
 
 function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
@@ -218,6 +222,8 @@ begin
 end;
 
 constructor TModelManagerImpl<TData,TClassification>.Create;
+var
+  LClassifier:TClassifierImpl<TData,TClassification>;
 begin
   inherited Create;
   FDataFeeder:=InitDataFeeder;
@@ -230,7 +236,9 @@ begin
   //to use in case we have to un-sub later
   FPreClass.PublicationType:=cpPreClassify;
   FAlterClass.PublicationType:=cpAlterClassify;
-  FClassifier:=InitClassifier(FDataFeeder);
+  LClassifier:=InitClassifier;
+  LClassifier.UpdateDataFeeder(DataFeeder);
+  FClassifier:=LClassifier;
   FClassifierSubscriber:=TSubscriberImpl<TClassifierPubPayload>.Create;
   FClassifierSubscriber.OnNotify:=RedirectClassification;
   FClassifier.Publisher.Subscribe(FClassifierSubscriber,FPreClass);

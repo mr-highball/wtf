@@ -42,7 +42,7 @@ type
   TTestManager = class(TStringManager)
   private
   protected
-    function InitClassifier(Const AFeeder : IDataFeeder<TData>):TClassifierImpl<TData,TClassification>;override;
+    function InitClassifier:TClassifierImpl<TData,TClassification>;override;
     function InitDataFeeder:TDataFeederImpl<TData>;override;
   public
 	end;
@@ -154,9 +154,9 @@ begin
   Result:=TTestFeeder.Create;
 end;
 
-function TTestManager.InitClassifier(Const AFeeder : IDataFeeder<TData>):TClassifierImpl<TData,TClassification>;
+function TTestManager.InitClassifier:TClassifierImpl<TData,TClassification>;
 begin
-  Result:=TTestClassifier.Create(AFeeder);
+  Result:=TTestClassifier.Create;
 end;
 
 function TTestManager.InitDataFeeder:TDataFeederImpl<TData>;
@@ -266,11 +266,13 @@ begin
   //feed data to the manager (this should get propagated down to model)
   LManager.DataFeeder.Feed('test1');
   LManager.DataFeeder.Feed('test2');
+  WriteLn('manager feeder count: ',LManager.DataFeeder.Count);
+  WriteLn('manager model feeder count: ',LManager.Models.Collection[0].DataFeeder.Count);
   //classify via manager, which should aggregate models for their classifications
   LID:=LManager.Classifier.Classify(LClassification);
   //now provide some arbitrary feedback which should 'weight' the model
   if not LManager.ProvideFeedback('test',LID) then
-    WriteLn('provide feedback failed');
+    WriteLn('provide feedback failed for id: ',LID.ToString);
 end;
 
 var
@@ -294,13 +296,13 @@ begin
       ptNumber,
       LError
     );
-    (*WriteLn(LPersist.ToJson);
+    WriteLn(LPersist.ToJson);
     TestKNN;
     TestFeeder;
     TestPublisher;
     TestPersistable;
     TestClassifier;
-    TestModel;*)
+    TestModel;
     TestManager;
     ReadLn();
   finally

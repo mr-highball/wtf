@@ -37,7 +37,7 @@ type
 
 implementation
 uses
-  wtf.core.publisher, wtf.core.feeder;
+  wtf.core.publisher;
 
 { TClassifierImpl }
 
