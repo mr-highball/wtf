@@ -451,8 +451,8 @@ begin
     //provided the correct classification, and then those that didn't
     LCorrect:=TVoteEntries.Create(True);
     LIncorrect:=TVoteEntries.Create(True);
+    {$region splitting to groups}
     try
-      {$region splitting to groups}
       for J:=0 to Pred(LEntries.Count) do
       begin
         if LEntries[J].Classification=ACorrectClassification then
@@ -536,6 +536,8 @@ begin
       LIncorrect.Free;
     end;
     {$endregion}
+    //remove vote entries from map after collecting feedback
+    FVoteMap.Delete(I);
     Result:=True;
   except on E:Exception do
     Error:=E.Message;
