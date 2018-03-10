@@ -104,9 +104,9 @@ type
     property Classifier : IClassifier<TData,TClassification> read GetClassifier;
     //methods
     function ProvideFeedback(Const ACorrectClassification:TClassification;
-      Const AIdentifer:TIdentifier):Boolean;overload;
+      Const AIdentifier:TIdentifier):Boolean;overload;
     function ProvideFeedback(Const ACorrectClassification:TClassification;
-      Const AIdentifer:TIdentifier; Out Error:String):Boolean;overload;
+      Const AIdentifier:TIdentifier; Out Error:String):Boolean;overload;
     constructor Create;override;
     destructor Destroy;override;
   end;
@@ -368,13 +368,13 @@ end;
 procedure TModelManagerImpl<TData,TClassification>.DoPersist;
 begin
   inherited DoPersist;
-  { TODO 5 : write all properties to json }
+  { TODO 1 : write all properties to json }
 end;
 
 procedure TModelManagerImpl<TData,TClassification>.DoReload;
 begin
   inherited DoReload;
-  { TODO 5 : read all properties from json }
+  { TODO 2 : read all properties from json }
 end;
 
 function TModelManagerImpl<TData,TClassification>.GetModels: TModels<TData,TClassification>;
@@ -394,19 +394,152 @@ end;
 
 function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
   Const ACorrectClassification:TClassification;
-  Const AIdentifer:TIdentifier):Boolean;
+  Const AIdentifier:TIdentifier):Boolean;
 Var
   LError:String;
 begin
-  Result:=ProvideFeedback(ACorrectClassification,AIdentifer,LError);
+  Result:=ProvideFeedback(ACorrectClassification,AIdentifier,LError);
 end;
 
 function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
   Const ACorrectClassification:TClassification;
-  Const AIdentifer:TIdentifier; Out Error:String):Boolean;
+  Const AIdentifier:TIdentifier; Out Error:String):Boolean;
+const
+  E_NO_ENTRY = 'no vote entry for id %s';
+  E_NIL = '%s is nil for id %s';
+var
+  I,J:Integer;
+  LEntries:TVoteEntries;
+  LCorrect, LIncorrect:TVoteEntries;
+  LReward:TWeight;
+  LEntry:TWeightEntry;
+  LImbalance:Boolean;
 begin
   Result:=False;
-  { TODO 4 : look in vote map for id, and reward those that were successful }
+  try
+    {$region initial checks}
+    LReward:=Low(TWeight);
+    LImbalance:=False;
+    if FVoteMap.Count<1 then
+    begin
+      Error:=Format(E_NO_ENTRY,[AIdentifier.ToString]);
+      Exit;
+    end;
+    if not FVoteMap.Sorted then
+      FVoteMap.Sorted:=True;
+    if not FVoteMap.Find(AIdentifier.ToString,I) then
+    begin
+      Error:=Format(E_NO_ENTRY,[AIdentifier.ToString]);
+      Exit;
+    end;
+    LEntries:=FVoteMap.Data[I];
+    if not Assigned(LEntries) then
+    begin
+      Error:=Format(E_NIL,['vote enties',AIdentifier.ToString]);
+      FVoteMap.Delete(I);
+      Exit;
+    end;
+    //may need to change, but if no entries, just remove from map and return true
+    if LEntries.Count<1 then
+    begin
+      FVoteMap.Delete(I);
+      Result:=True;
+      Exit;
+    end;
+    {$endregion}
+    //in order to reward, will separate into two groups, one that
+    //provided the correct classification, and then those that didn't
+    LCorrect:=TVoteEntries.Create(True);
+    LIncorrect:=TVoteEntries.Create(True);
+    try
+      {$region splitting to groups}
+      for J:=0 to Pred(LEntries.Count) do
+      begin
+        if LEntries[J].Classification=ACorrectClassification then
+          LCorrect.Add(
+            TSpecializedVoteEntry.Create(
+              LEntries[I].Model,
+              LEntries[I].ID,
+              LEntries[I].Classification
+            )
+          )
+        else
+          LIncorrect.Add(
+            TSpecializedVoteEntry.Create(
+              LEntries[I].Model,
+              LEntries[I].ID,
+              LEntries[I].Classification
+            )
+          )
+      end;
+      {$endregion}
+      {$region group checks}
+      //if no incorrect models, then we did good, nothing to re-weight
+      if LIncorrect.Count<1 then
+      begin
+        FVoteMap.Delete(I);
+        Result:=True;
+        Exit;
+      end;
+      //if every model was incorrect, we have nothing to reward
+      if LCorrect.Count<1 then
+      begin
+        FVoteMap.Delete(I);
+        Result:=True;
+        Exit;
+      end;
+      {$endregion}
+      {$region weighting logic}
+      //take weight away from incorrect and divy out to correct. there may
+      //be an imbalance of points here, so in this case, randomly distribute
+      for J:=0 to Pred(LIncorrect.Count) do
+      begin
+        LEntry.Model:=@LIncorrect[J].Model;
+        if Pred(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))<Integer(Low(TWeight)) then
+          Continue;
+        if Succ(Integer(LReward))>Integer(High(TWeight)) then
+          Break;
+        FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
+        Inc(LReward);
+      end;
+      //reset counter and check for imbalance
+      J:=0;
+      if LReward<LCorrect.Count then
+        LImbalance:=True;
+      While LReward>Low(TWeight) do
+      begin
+        if LImbalance then
+        begin
+          Randomize;
+          J:=RandomRange(0,LCorrect.Count);
+          LEntry.Model:=@LCorrect[J].Model;
+          if Succ(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))>Integer(High(TWeight)) then
+            Continue;
+          FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
+          Dec(LReward);
+        end
+        else
+        begin
+          LEntry.Model:=@LCorrect[J].Model;
+          if Succ(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))>Integer(High(TWeight)) then
+            Continue;
+          FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
+          Dec(LReward);
+          //make sure we don't go out of bounds of correct list
+          Inc(J);
+          if J>Pred(LCorrect.Count) then
+            J:=0;
+        end;
+      end;
+    finally
+      LCorrect.Free;
+      LIncorrect.Free;
+    end;
+    {$endregion}
+    Result:=True;
+  except on E:Exception do
+    Error:=E.Message;
+  end;
 end;
 
 constructor TModelManagerImpl<TData,TClassification>.Create;

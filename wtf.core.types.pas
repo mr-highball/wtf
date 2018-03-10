@@ -349,9 +349,9 @@ type
     property Classifier : IClassifier<TData,TClassification> read GetClassifier;
     //methods
     function ProvideFeedback(Const ACorrectClassification:TClassification;
-      Const AIdentifer:TIdentifier):Boolean;overload;
+      Const AIdentifier:TIdentifier):Boolean;overload;
     function ProvideFeedback(Const ACorrectClassification:TClassification;
-      Const AIdentifer:TIdentifier; Out Error:String):Boolean;overload;
+      Const AIdentifier:TIdentifier; Out Error:String):Boolean;overload;
   end;
 
 implementation
