@@ -58,7 +58,7 @@ type
         {$ENDIF}
       TWeight = 0..100;
       PWeightModel = ^IModel<TData,TClassification>;
-      TWeightEntry = Record
+      TWeightEntry = record
       private
         FModel:PWeightModel;
         FWeight:TWeight;
@@ -109,9 +109,6 @@ type
       Const AIdentifer:TIdentifier; Out Error:String):Boolean;overload;
     constructor Create;override;
     destructor Destroy;override;
-    { TODO 3 : keep track of classifications/id's using classifier subscriber }
-    { TODO 4 : Voting system in place for the model manager }
-    { TODO 5 : add classification by id to classifier interface, or handle by caller? }
   end;
 
 implementation
@@ -232,13 +229,64 @@ end;
 
 function TModelManagerImpl<TData,TClassification>.GetWeightedClassification(
   Const AEntries:TVoteEntries) : TClassification;
+type
+  TWeightMap =
+    {$IFDEF FPC}
+    TFPGMap<TClassification,TWeight>
+    {$ELSE}
+    TDictionary<TClassification,TWeight>
+    {$ENDIF};
+var
+  I,J:Integer;
+  LMap:TWeightMap;
+  LEntry:TWeightEntry;
+  LHighest:TWeight;
 begin
-  Result:=AEntries[0].Classification;
+  //derp, drinking beer
+  if AEntries.Count<1 then
+    raise Exception.Create('no vote entries to base classification on, ya dingus.' +
+      'Also, did you know Yuengling is America''s oldest brewery.'
+    );
   //first make sure all entries have made it to the weight array
   VerifyModels(AEntries);
   //now for each unique classification, sum up the weights, and return the
   //highest voted for response
-  //...
+  LMap:=TWeightMap.Create;
+  try
+    if not LMap.Sorted then
+      LMap.Sorted:=True;
+    for I:=0 to Pred(AEntries.Count) do
+    begin
+      LEntry.Model:=@AEntries[I].Model;
+      if FWeightList.IndexOf(LEntry)<0 then
+        Continue;
+      //if we haven't seen this classification yet, add it
+      if not LMap.Find(AEntries[I].Classification,J) then
+      begin
+        LMap.Add(
+          AEntries[I].Classification,
+          FWeightList[FWeightList.IndexOf(LEntry)].Weight
+        );
+        Continue;
+      end;
+      //add the weights together
+      LMap.Data[J]:=LMap.Data[J] + FWeightList[FWeightList.IndexOf(LEntry)].Weight
+    end;
+    //could use a compare to sort desc, but can't do nested procs for generics,
+    //so would need to define tweight outside of class...being lazy
+    Result:=LMap.Keys[0];
+    LHighest:=LMap.Data[0];
+    for I:=0 to Pred(LMap.Count) do
+    begin
+      if LMap.Data[I]>LHighest then
+      begin
+        Result:=LMap.Keys[I];
+        LHighest:=LMap.Data[I];
+      end;
+    end;
+  finally
+    LMap.Free;
+  end;
 end;
 
 procedure TModelManagerImpl<TData,TClassification>.RedirectClassification(
@@ -268,7 +316,7 @@ begin
     LEntries:=FVoteMap.Data[I];
     //regardless of whatever the initialized classifier spits out as default
     //we will change it to be the aggregate response for our identifier
-    for I:=0 to High(Models.Collection.Count) do
+    for I:=0 to Pred(Models.Collection.Count) do
     begin
       //first add this classification to the entries
       LIdentifier:=Models.Collection[I].Classifier.Classify(LClassification);
@@ -309,7 +357,11 @@ begin
   if AMessage=fpPostClear then
   begin
     FVoteMap.Clear;
+    //before internal clearing, unsubscribe first
+    FDataFeeder.Publisher.Remove(FDataFeederSubscriber,fpPostClear);
     FDataFeeder.Clear;
+    //re-subscribe once internal clear has been finished
+    FDataFeeder.Publisher.Subscribe(FDataFeederSubscriber,fpPostClear);
   end;
 end;
 

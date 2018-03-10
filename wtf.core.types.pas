@@ -355,8 +355,7 @@ type
   end;
 
 implementation
-uses
-  wtf.core.publisher;
+
 { TClassifierPubPayload }
 
 class operator TClassifierPubPayload.Equal(Const a, b : TClassifierPubPayload) : Boolean;

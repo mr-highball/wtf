@@ -258,6 +258,7 @@ var
   LModel:IModel<String,String>;
   LID:TIdentifier;
   LClassification:String;
+  I:Integer;
 begin
   LManager:=TTestManager.Create;
   LModel:=TTestModel.Create;
@@ -269,10 +270,14 @@ begin
   WriteLn('manager feeder count: ',LManager.DataFeeder.Count);
   WriteLn('manager model feeder count: ',LManager.Models.Collection[0].DataFeeder.Count);
   //classify via manager, which should aggregate models for their classifications
-  LID:=LManager.Classifier.Classify(LClassification);
-  //now provide some arbitrary feedback which should 'weight' the model
-  if not LManager.ProvideFeedback('test',LID) then
-    WriteLn('provide feedback failed for id: ',LID.ToString);
+  for I:=0 to 1000 do
+  begin
+    LID:=LManager.Classifier.Classify(LClassification);
+    WriteLn('Classification for ID:',LID.ToString,' classification: ',LClassification);
+    //now provide some arbitrary feedback which should 'weight' the model
+    if not LManager.ProvideFeedback('test',LID) then
+      WriteLn('provide feedback failed for id: ',LID.ToString);
+  end;
 end;
 
 var
@@ -297,12 +302,12 @@ begin
       LError
     );
     WriteLn(LPersist.ToJson);
-    (*TestKNN;
+    TestKNN;
     TestFeeder;
     TestPublisher;
     TestPersistable;
     TestClassifier;
-    TestModel;*)
+    TestModel;
     TestManager;
     ReadLn();
   finally
