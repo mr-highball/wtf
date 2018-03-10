@@ -297,12 +297,12 @@ begin
       LError
     );
     WriteLn(LPersist.ToJson);
-    TestKNN;
+    (*TestKNN;
     TestFeeder;
     TestPublisher;
     TestPersistable;
     TestClassifier;
-    TestModel;
+    TestModel;*)
     TestManager;
     ReadLn();
   finally

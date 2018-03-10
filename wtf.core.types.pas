@@ -13,6 +13,16 @@ uses
   {$ENDIF};
 
 type
+  { TSortMethod }
+  (*
+    specifies method for sorting lists
+  *)
+  TSortMethod = (
+    smFIFO,
+    smLIFO,
+    smRandomize
+  );
+
   { TComparison }
   (*
     useful for sorting or checking for equality
@@ -30,17 +40,8 @@ type
   public
     property OnCompare : TCompareEvent<T> read FOnCompare write FOnCompare;
     function Compare(Const A, B : T):TComparisonOperator;
+    constructor Create;virtual;
   end;
-
-  { TSortMethod }
-  (*
-    specifies method for sorting lists
-  *)
-  TSortMethod = (
-    smFIFO,
-    smLIFO,
-    smRandomize
-  );
 
   { ISubscriber }
   (*
@@ -58,6 +59,7 @@ type
     //methods
     procedure Notify(Const AMessage : TMessage);
   end;
+
 
   { IPublisher }
   (*
@@ -249,17 +251,24 @@ type
     class operator LessThan(Const a, b : TClassifierPubPayload) : Boolean;
   end;
 
+  { PClassifierPubPayload }
+  (*
+    Used as a workaround for double specialized publisher type because
+    using record as message was incredibly slow
+  *)
+  PClassifierPubPayload = ^TClassifierPubPayload;
+
   { IClassificationPublisher }
   (*
     a publisher of classifier payload
   *)
-  IClassificationPublisher = IPublisher<TClassifierPubPayload>;
+  IClassificationPublisher = IPublisher<PClassifierPubPayload>;
 
   { IClassificationSubscriber }
   (*
     a subscriber to classifier payloads
   *)
-  IClassificationSubscriber = ISubscriber<TClassifierPubPayload>;
+  IClassificationSubscriber = ISubscriber<PClassifierPubPayload>;
 
   { TClassifierArray }
   (*
@@ -346,7 +355,8 @@ type
   end;
 
 implementation
-
+uses
+  wtf.core.publisher;
 { TClassifierPubPayload }
 
 class operator TClassifierPubPayload.Equal(Const a, b : TClassifierPubPayload) : Boolean;
@@ -382,8 +392,25 @@ end;
 function TComparison<T>.Compare(const A, B: T): TComparisonOperator;
 begin
   if not Assigned(FOnCompare) then
-    raise Exception.Create('no suitable compare event specified');
+  begin
+    try
+      if A<B then
+        Result:=coLess
+      else if A=B then
+        Result:=coEqual
+      else
+        Result:=coGreater;
+      Exit;
+    except on E:Exception do
+      raise Exception.Create('no suitable compare event specified error: '+E.Message);
+    end;
+  end;
   Result:=FOnCompare(A,B);
+end;
+
+constructor TComparison<T>.Create;
+begin
+  inherited Create;
 end;
 
 end.

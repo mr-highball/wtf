@@ -63,14 +63,14 @@ begin
   LMessage.PublicationType:=cpPreClassify;
   LMessage.ID:=Result;
   LMessage.Classification:=nil;
-  Publisher.Notify(LMessage);
+  Publisher.Notify(@LMessage);
   Classification:=DoClassify(FFeeder.DataRepository);
   //for anyone subscribers of this next message, we give them the oppurtunity
   //to change the classification if they would like
   LClassification:=Classification;
   LMessage.PublicationType:=cpAlterClassify;
   LMessage.Classification:=LClassification;
-  Publisher.Notify(LMessage);
+  Publisher.Notify(@LMessage);
   //if we our classification is different than the one passed to alter, we
   //will go with what subscribers state
   if LMessage.Classification<>Classification then
@@ -78,7 +78,7 @@ begin
   //now notify subscribers after we have classified
   LMessage.PublicationType:=cpPostClassify;
   LMessage.Classification:=Classification;
-  Publisher.Notify(LMessage);
+  Publisher.Notify(@LMessage);
 end;
 
 function TClassifierImpl<TData,TClassification>.GetSupportedClassifiers: TClassifierArray<TClassification>;
@@ -95,7 +95,7 @@ end;
 constructor TClassifierImpl<TData,TClassification>.Create(Const AFeeder : IDataFeeder<TData>);
 begin
   FSupported:=DoGetSupportedClassifiers;
-  FPublisher:=TPublisherImpl<TClassifierPubPayload>.Create;
+  FPublisher:=TPublisherImpl<PClassifierPubPayload>.Create;
   UpdateDataFeeder(AFeeder);
 end;
 

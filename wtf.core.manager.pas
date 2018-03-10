@@ -56,6 +56,23 @@ type
         //delphi dictionary should be able to handle guid as key
         TObjectDictionary<TIdentifier,TSpecializedVoteEntry>;
         {$ENDIF}
+      TWeight = 0..100;
+      PWeightModel = ^IModel<TData,TClassification>;
+      TWeightEntry = Record
+      private
+        FModel:PWeightModel;
+        FWeight:TWeight;
+      public
+        property Model : PWeightModel read FModel write FModel;
+        property Weight : TWeight read FWeight write FWeight;
+        class operator Equal(Const a, b : TWeightEntry) : Boolean;
+      end;
+      TWeightList =
+        {$IFDEF FPC}
+        TFPGList<TWeightEntry>
+        {$ELSE}
+        TList<TWeightEntry>
+        {$ENDIF};
   private
     FModels : TModels<TData,TClassification>;
     FDataFeeder : IDataFeeder<TData>;
@@ -65,11 +82,15 @@ type
     FVoteMap : TVoteMap;
     FPreClass : TClassifierPubPayload;
     FAlterClass : TClassifierPubPayload;
+    FWeightList : TWeightList;
     function GetModels: TModels<TData,TClassification>;
     function GetDataFeeder : IDataFeeder<TData>;
     function GetClassifier : IClassifier<TData,TClassification>;
     procedure RedirectData(Const AMessage:TDataFeederPublication);
-    procedure RedirectClassification(Const AMessage:TClassifierPubPayload);
+    procedure RedirectClassification(Const AMessage:PClassifierPubPayload);
+    function GetWeightedClassification(Const AEntries:TVoteEntries) : TClassification;
+    procedure VerifyModels(Const AEntries:TVoteEntries);
+    function ComparePayload(Const A, B : PClassifierPubPayload):TComparisonOperator;
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
@@ -95,7 +116,7 @@ type
 
 implementation
 uses
-  wtf.core.subscriber;
+  wtf.core.subscriber, math;
 
 { TVoteEntry }
 
@@ -115,21 +136,127 @@ begin
   inherited Destroy;
 end;
 
+{ TWeightEntry }
+
+class operator TModelManagerImpl<TData,TClassification>.TWeightEntry.Equal(Const a, b : TWeightEntry) : Boolean;
+begin
+  Result:=a.Model=b.Model;
+end;
+
 { TModelManagerImpl }
 
-procedure TModelManagerImpl<TData,TClassification>.RedirectClassification(
-  Const AMessage:TClassifierPubPayload);
+function TModelManagerImpl<TData,TClassification>.ComparePayload(Const A, B : PClassifierPubPayload):TComparisonOperator;
+begin
+  if A.PublicationType<B.PublicationType then
+    Result:=coLess
+  else if A.PublicationType=B.PublicationType then
+    Result:=coEqual
+  else
+    Result:=coGreater;
+end;
+
+procedure TModelManagerImpl<TData,TClassification>.VerifyModels(Const AEntries:TVoteEntries);
 var
-  LEntry:TVoteEntries;
+  I,J:Integer;
+  LRebalance:Boolean;
+  LProportionalWeight:TWeight;
+  LRemainder:TWeight;
+  LWeightEntry:TWeightEntry;
+  LRemove:array of Integer;
+begin
+  LRebalance:=False;
+  SetLength(LRemove,0);
+  //first make sure we don't need to add any models from entries
+  for I:=0 to Pred(AEntries.Count) do
+  begin
+    if not Assigned(AEntries[I].Model) then
+      Continue;
+    LWeightEntry.Model:=@AEntries[I].Model;
+    LWeightEntry.Weight:=Low(TWeight);
+    if FWeightList.IndexOf(LWeightEntry)<0 then
+    begin
+      FWeightList.Add(LWeightEntry);
+      if not LRebalance then
+        LRebalance:=True;
+    end;
+  end;
+  //next, make sure we remove any invalid entries
+  for I:=0 to Pred(FWeightList.Count) do
+  begin
+    //first case is the model pointer we have has been removed
+    if not Assigned(FWeightList[I].Model^) then
+    begin
+      SetLength(LRemove,Succ(Length(LRemove)));
+      LRemove[High(LRemove)]:=I;
+      if not LRebalance then
+        LRebalance:=True;
+    end;
+    //next case, is that a model has been removed from the model collection
+    //and is not in the entries, so we remove it
+    if not AEntries.Count<>FWeightList.Count then
+    begin
+      for J:=0 to Pred(AEntries.Count) do
+      begin
+        if not Assigned(AEntries[J].Model) then
+          Continue;
+        LWeightEntry.Model:=@AEntries[J].Model;
+        if FWeightList.IndexOf(LWeightEntry)<0 then
+        begin
+          SetLength(LRemove,Succ(Length(LRemove)));
+          LRemove[High(LRemove)]:=I;
+          if not LRebalance then
+            LRebalance:=True;
+        end;
+      end;
+    end;
+  end;
+  //lastly if we need to rebalance the weights, do so in a proportional manner,
+  //may need to change in the future to guage off of prior weights..
+  if LRebalance then
+  begin
+    LProportionalWeight:=Trunc(Integer(High(TWeight)) / FWeightList.Count);
+    for I:=0 to Pred(FWeightList.Count) do
+      FWeightList[I].Weight:=LProportionalWeight;
+    LRemainder:=High(TWeight) - LProportionalWeight;
+    //distribute any remainder amounts randomly
+    if LRemainder>0 then
+      Randomize;
+    While LRemainder>0 do
+    begin
+      I:=RandomRange(0,FWeightList.Count);
+      FWeightList[I].Weight:=FWeightList[I].Weight + 1;
+      Dec(LRemainder);
+    end;
+  end;
+end;
+
+function TModelManagerImpl<TData,TClassification>.GetWeightedClassification(
+  Const AEntries:TVoteEntries) : TClassification;
+begin
+  Result:=AEntries[0].Classification;
+  //first make sure all entries have made it to the weight array
+  VerifyModels(AEntries);
+  //now for each unique classification, sum up the weights, and return the
+  //highest voted for response
+  //...
+end;
+
+procedure TModelManagerImpl<TData,TClassification>.RedirectClassification(
+  Const AMessage:PClassifierPubPayload);
+var
+  LEntries:TVoteEntries;
+  LEntry:TSpecializedVoteEntry;
   I:Integer;
+  LClassification:TClassification;
+  LIdentifier:TIdentifier;
 begin
   //when someone wants to classify, we need to grab the identifier as the
   //key to a "batch" of classifications
   if AMessage.PublicationType=cpPreClassify then
   begin
-    LEntry:=TVoteEntries.Create(True);
+    LEntries:=TVoteEntries.Create(True);
     //capture the identifier our classifier generated and use it as a key
-    FVoteMap.Add(AMessage.ID.ToString,LEntry);
+    FVoteMap.Add(AMessage.ID.ToString,LEntries);
   end
   else if AMessage.PublicationType=cpAlterClassify then
   begin
@@ -138,13 +265,22 @@ begin
     //need to make sure we still have the identifier
     if not FVoteMap.Find(AMessage.ID.ToString, I) then
       Exit;
-    LEntry:=FVoteMap.Data[I];
+    LEntries:=FVoteMap.Data[I];
     //regardless of whatever the initialized classifier spits out as default
     //we will change it to be the aggregate response for our identifier
     for I:=0 to High(Models.Collection.Count) do
     begin
-      //Models.Collection[I].Classify(
+      //first add this classification to the entries
+      LIdentifier:=Models.Collection[I].Classifier.Classify(LClassification);
+      LEntry:=TSpecializedVoteEntry.Create(
+        Models.Collection[I],
+        LIdentifier,
+        LClassification
+      );
+      LEntries.Add(LEntry);
     end;
+    //now according to weight, we will get the aggregate response
+    AMessage.Classification:=GetWeightedClassification(LEntries);
   end;
 end;
 
@@ -237,14 +373,16 @@ begin
   FPreClass.PublicationType:=cpPreClassify;
   FAlterClass.PublicationType:=cpAlterClassify;
   LClassifier:=InitClassifier;
+  LClassifier.Publisher.MessageComparison.OnCompare:=ComparePayload;
   LClassifier.UpdateDataFeeder(DataFeeder);
   FClassifier:=LClassifier;
-  FClassifierSubscriber:=TSubscriberImpl<TClassifierPubPayload>.Create;
+  FClassifierSubscriber:=TSubscriberImpl<PClassifierPubPayload>.Create;
   FClassifierSubscriber.OnNotify:=RedirectClassification;
-  FClassifier.Publisher.Subscribe(FClassifierSubscriber,FPreClass);
-  FClassifier.Publisher.Subscribe(FClassifierSubscriber,FAlterClass);
+  FClassifier.Publisher.Subscribe(FClassifierSubscriber,@FPreClass);
+  FClassifier.Publisher.Subscribe(FClassifierSubscriber,@FAlterClass);
   FModels:=TModels<TData,TClassification>.Create;
   FVoteMap:=TVoteMap.Create(True);
+  FWeightList:=TWeightList.Create;
 end;
 
 destructor TModelManagerImpl<TData,TClassification>.Destroy;
@@ -255,6 +393,7 @@ begin
   FClassifierSubscriber:=nil;
   FModels.Free;
   FVoteMap.Free;
+  FWeightList.Free;
   inherited Destroy;
 end;
 

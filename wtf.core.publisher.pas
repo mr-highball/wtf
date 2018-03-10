@@ -30,6 +30,10 @@ type
         TFPGMapObject<TMessage,TSubscriberList>
         {$ELSE}
         {$ENDIF};
+      TPubComparison = class(TComparison<TMessage>)
+      public
+        function RedirectCompare(Key1, Key2: Pointer): Integer;
+      end;
   private
     FMap : TMessageMap;
     FComparison : TComparison<TMessage>;
@@ -49,6 +53,20 @@ type
   end;
 
 implementation
+
+{ TPubComparison }
+
+function TPublisherImpl<TMessage>.TPubComparison.RedirectCompare(Key1, Key2: Pointer): Integer;
+begin
+  case Compare(TMessage(Key1^),TMessage(Key2^)) of
+    coLess:
+      Result:=-1;
+    coEqual:
+      Result:=0;
+    coGreater:
+      Result:=1;
+  end;
+end;
 
 { TPublisher }
 
@@ -108,12 +126,10 @@ end;
 
 constructor TPublisherImpl<TMessage>.Create;
 begin
-  { TODO 7 : wtf.core.publisher, figure out how to adapt the comparison to a list compare }
-  //TODO - figure out how to adapt this, or modify to get it to compare
-  //keys in the map (FPC uses pointer comparison for event, delphi may be different)
-  FComparison:=TComparison<TMessage>.Create;
+  FComparison:=TPubComparison.Create;
   //manages list objects for us
   FMap:=TMessageMap.Create(True);
+  FMap.OnPtrCompare:=TPubComparison(FComparison).RedirectCompare;
 end;
 
 destructor TPublisherImpl<TMessage>.Destroy;
