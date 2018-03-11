@@ -192,6 +192,7 @@ begin
           FMap.Add(LObj.Names[I],LPair);
         end;
       end;
+      Result:=True;
     finally
       LParser.Free;
       LData.Free;

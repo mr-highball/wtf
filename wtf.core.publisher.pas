@@ -58,6 +58,7 @@ implementation
 
 function TPublisherImpl<TMessage>.TPubComparison.RedirectCompare(Key1, Key2: Pointer): Integer;
 begin
+  Result:=-1;
   case Compare(TMessage(Key1^),TMessage(Key2^)) of
     coLess:
       Result:=-1;
