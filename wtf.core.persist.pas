@@ -160,7 +160,6 @@ end;
 function TJSONPersistImpl.DoFromJSON(const AJSON: String): Boolean;
 var
   {$IFDEF FPC}
-  LParser : TJSONParser;
   LData : TJSONData;
   LObj : TJSONObject;
   I : Integer;
@@ -174,8 +173,7 @@ begin
     FMap.Clear;
     //need to check to make sure we have a JSON object, iterate all
     //properties, then fill out our map object with corresponding types/name/values
-    LParser:=TJSONParser.Create(AJSON,[]);
-    LData:=LParser.Parse;
+    LData:=GetJSON(AJSON);
     try
       if LData is TJSONObject then
       begin
@@ -199,7 +197,6 @@ begin
       end;
       Result:=True;
     finally
-      LParser.Free;
       LData.Free;
     end;
   except on E:Exception do
@@ -420,8 +417,8 @@ begin
             );
           end;
       end;
-      Result:=LObj.AsJSON;
     end;
+    Result:=LObj.AsJSON;
   finally
     LObj.Free;
   end;
