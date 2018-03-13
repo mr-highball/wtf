@@ -120,6 +120,7 @@ end;
 
 constructor TPersistableImpl.Create;
 begin
+  inherited;
   FJSONPersist:=TJSONPersistImpl.Create;
   FSubscriber:=TSubscriberImpl<TPersistPublication>.Create;
   FSubscriber.OnNotify:=InterceptPersist;
@@ -127,6 +128,10 @@ begin
   FJSONPersist.Publisher.Subscribe(
     FSubscriber,
     ppPreToJSON
+  );
+  FJSONPersist.Publisher.Subscribe(
+    FSubscriber,
+    ppPostFromJSON
   );
 end;
 
