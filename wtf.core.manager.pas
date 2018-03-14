@@ -458,17 +458,17 @@ begin
         if LEntries[J].Classification=ACorrectClassification then
           LCorrect.Add(
             TSpecializedVoteEntry.Create(
-              LEntries[I].Model,
-              LEntries[I].ID,
-              LEntries[I].Classification
+              LEntries[J].Model,
+              LEntries[J].ID,
+              LEntries[J].Classification
             )
           )
         else
           LIncorrect.Add(
             TSpecializedVoteEntry.Create(
-              LEntries[I].Model,
-              LEntries[I].ID,
-              LEntries[I].Classification
+              LEntries[J].Model,
+              LEntries[J].ID,
+              LEntries[J].Classification
             )
           )
       end;
@@ -531,6 +531,7 @@ begin
             J:=0;
         end;
       end;
+      Result:=True;
     finally
       LCorrect.Free;
       LIncorrect.Free;
@@ -538,7 +539,6 @@ begin
     {$endregion}
     //remove vote entries from map after collecting feedback
     FVoteMap.Delete(I);
-    Result:=True;
   except on E:Exception do
     Error:=E.Message;
   end;
