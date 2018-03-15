@@ -137,7 +137,7 @@ end;
 
 class operator TModelManagerImpl<TData,TClassification>.TWeightEntry.Equal(Const a, b : TWeightEntry) : Boolean;
 begin
-  Result:=a.Model=b.Model;
+  Result:=a.Model^=b.Model^;
 end;
 
 { TModelManagerImpl }
@@ -407,6 +407,9 @@ function TModelManagerImpl<TData,TClassification>.ProvideFeedback(
 const
   E_NO_ENTRY = 'no vote entry for id %s';
   E_NIL = '%s is nil for id %s';
+const
+  MAX_WEIGHT : Integer = High(TWeight);
+  MIN_WEIGHT : Integer = Low(TWeight);
 var
   I,J:Integer;
   LEntries:TVoteEntries;
@@ -495,6 +498,8 @@ begin
       for J:=0 to Pred(LIncorrect.Count) do
       begin
         LEntry.Model:=@LIncorrect[J].Model;
+        if FWeightList.IndexOf(LEntry)<0 then
+          Continue;
         if Pred(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))<Integer(Low(TWeight)) then
           Continue;
         if Succ(Integer(LReward))>Integer(High(TWeight)) then
@@ -513,6 +518,8 @@ begin
           Randomize;
           J:=RandomRange(0,LCorrect.Count);
           LEntry.Model:=@LCorrect[J].Model;
+          if FWeightList.IndexOf(LEntry)<0 then
+            Continue;
           if Succ(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))>Integer(High(TWeight)) then
             Continue;
           FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
@@ -521,6 +528,8 @@ begin
         else
         begin
           LEntry.Model:=@LCorrect[J].Model;
+          if FWeightList.IndexOf(LEntry)<0 then
+            Continue;
           if Succ(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))>Integer(High(TWeight)) then
             Continue;
           FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
@@ -531,14 +540,14 @@ begin
             J:=0;
         end;
       end;
+      //remove vote entries from map after collecting feedback
+      FVoteMap.Delete(I);
       Result:=True;
     finally
       LCorrect.Free;
       LIncorrect.Free;
     end;
     {$endregion}
-    //remove vote entries from map after collecting feedback
-    FVoteMap.Delete(I);
   except on E:Exception do
     Error:=E.Message;
   end;

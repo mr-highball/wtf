@@ -88,11 +88,11 @@ begin
   I:=0;
   Publisher.Notify(fpPreClear);
   //can clear without worrying about sorting if requested amount is higher
-  if (AAmount=0) or (AAmount>=FData.Count) then
+  if (AAmount=0) or (NativeInt(AAmount)>=FData.Count) then
     FData.Clear
   else if FSortMethod=smFIFO then
   begin
-    while I<Pred(AAmount) do
+    while I<Pred(NativeInt(AAmount)) do
     begin
       FData.Delete(0);
       Inc(I);
@@ -100,7 +100,7 @@ begin
   end
   else if FSortMethod=smLIFO then
   begin
-    while I<Pred(AAmount) do
+    while I<Pred(NativeInt(AAmount)) do
     begin
       FData.Delete(Pred(FData.Count));
       Inc(I);
@@ -109,7 +109,7 @@ begin
   else
   begin
     Randomize;
-    while I<Pred(AAmount) do
+    while I<Pred(NativeInt(AAmount)) do
     begin
       FData.Delete(RandomRange(0,FData.Count));
       Inc(I);
@@ -120,7 +120,7 @@ end;
 
 function TDataFeederImpl<TData>.GetItem(Const AIndex : Cardinal) : TData;
 begin
-  if (FData.Count<=0) or (AIndex>Pred(FData.Count)) then
+  if (FData.Count<=0) or (Integer(AIndex)>Pred(FData.Count)) then
     raise EInvalidArgument.Create('index out of bounds');
   //simple case using list indexer
   if FSortMethod=smFIFO then
