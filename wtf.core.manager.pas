@@ -137,7 +137,7 @@ end;
 
 class operator TModelManagerImpl<TData,TClassification>.TWeightEntry.Equal(Const a, b : TWeightEntry) : Boolean;
 begin
-  Result:=a.Model^=b.Model^;
+  Result:=@a.Model^=@b.Model^;
 end;
 
 { TModelManagerImpl }
@@ -156,12 +156,14 @@ procedure TModelManagerImpl<TData,TClassification>.VerifyModels(Const AEntries:T
 var
   I,J:Integer;
   LRebalance:Boolean;
-  LProportionalWeight:TWeight;
-  LRemainder:TWeight;
+  LProportionalWeight:Integer;
+  LRemainder:Integer;
   LWeightEntry:TWeightEntry;
   LRemove:array of Integer;
 begin
   LRebalance:=False;
+  LRemainder:=0;
+  LProportionalWeight:=0;
   SetLength(LRemove,0);
   //first make sure we don't need to add any models from entries
   for I:=0 to Pred(AEntries.Count) do
@@ -211,17 +213,19 @@ begin
   //may need to change in the future to guage off of prior weights..
   if LRebalance then
   begin
-    LProportionalWeight:=Trunc(Integer(High(TWeight)) / FWeightList.Count);
+    LProportionalWeight:=Trunc(NativeInt(High(TWeight)) / FWeightList.Count);
     for I:=0 to Pred(FWeightList.Count) do
       FWeightList[I].Weight:=LProportionalWeight;
-    LRemainder:=High(TWeight) - LProportionalWeight;
+    LRemainder:=Round(Frac(NativeInt(High(TWeight)) / FWeightList.Count) * FWeightList.Count);
     //distribute any remainder amounts randomly
     if LRemainder>0 then
       Randomize;
     While LRemainder>0 do
     begin
       I:=RandomRange(0,FWeightList.Count);
-      FWeightList[I].Weight:=FWeightList[I].Weight + 1;
+      //don't increase if we are already at the cap
+      if not Succ(NativeInt(FWeightList[I].Weight))>High(TWeight) then
+        FWeightList[I].Weight:=FWeightList[I].Weight + 1;
       Dec(LRemainder);
     end;
   end;
@@ -411,7 +415,7 @@ const
   MAX_WEIGHT : Integer = High(TWeight);
   MIN_WEIGHT : Integer = Low(TWeight);
 var
-  I,J:Integer;
+  I,J,K:Integer;
   LEntries:TVoteEntries;
   LCorrect, LIncorrect:TVoteEntries;
   LReward:TWeight;
@@ -498,41 +502,44 @@ begin
       for J:=0 to Pred(LIncorrect.Count) do
       begin
         LEntry.Model:=@LIncorrect[J].Model;
-        if FWeightList.IndexOf(LEntry)<0 then
+        K:=FWeightList.IndexOf(LEntry);
+        if K<0 then
           Continue;
-        if Pred(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))<Integer(Low(TWeight)) then
+        if Pred(Integer(FWeightList[K].Weight))<MIN_WEIGHT then
           Continue;
-        if Succ(Integer(LReward))>Integer(High(TWeight)) then
+        if Succ(Integer(LReward))>MAX_WEIGHT then
           Break;
-        FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
+        FWeightList[K].Weight:=Pred(FWeightList[K].Weight);
         Inc(LReward);
       end;
       //reset counter and check for imbalance
       J:=0;
       if LReward<LCorrect.Count then
         LImbalance:=True;
-      While LReward>Low(TWeight) do
+      While LReward>MIN_WEIGHT do
       begin
         if LImbalance then
         begin
           Randomize;
           J:=RandomRange(0,LCorrect.Count);
           LEntry.Model:=@LCorrect[J].Model;
-          if FWeightList.IndexOf(LEntry)<0 then
+          K:=FWeightList.IndexOf(LEntry);
+          if K<0 then
             Continue;
-          if Succ(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))>Integer(High(TWeight)) then
+          if Succ(Integer(FWeightList[K].Weight))>MAX_WEIGHT then
             Continue;
-          FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
+          FWeightList[K].Weight:=Pred(FWeightList[K].Weight);
           Dec(LReward);
         end
         else
         begin
           LEntry.Model:=@LCorrect[J].Model;
-          if FWeightList.IndexOf(LEntry)<0 then
+          K:=FWeightList.IndexOf(LEntry);
+          if K<0 then
             Continue;
-          if Succ(Integer(FWeightList[FWeightList.IndexOf(LEntry)].Weight))>Integer(High(TWeight)) then
+          if Succ(Integer(FWeightList[K].Weight))>MAX_WEIGHT then
             Continue;
-          FWeightList[FWeightList.IndexOf(LEntry)].Weight:=Pred(FWeightList[FWeightList.IndexOf(LEntry)].Weight);
+          FWeightList[K].Weight:=Pred(FWeightList[K].Weight);
           Dec(LReward);
           //make sure we don't go out of bounds of correct list
           Inc(J);
@@ -540,13 +547,13 @@ begin
             J:=0;
         end;
       end;
-      //remove vote entries from map after collecting feedback
-      FVoteMap.Delete(I);
       Result:=True;
     finally
       LCorrect.Free;
       LIncorrect.Free;
     end;
+    //remove vote entries from map after collecting feedback
+    FVoteMap.Delete(I);
     {$endregion}
   except on E:Exception do
     Error:=E.Message;
