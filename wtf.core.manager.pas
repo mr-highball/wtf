@@ -197,8 +197,9 @@ begin
   //and storing in our tracking array
   for I:=0 to Pred(FWeightList.Count) do
   begin
+    LWeightEntry:=FWeightList[I];
     //first case is the model pointer we have has been removed
-    if not Assigned(FWeightList[I].Model^) then
+    if not Assigned(LWeightEntry.Model^) then
     begin
       SetLength(LRemove,Succ(Length(LRemove)));
       LRemove[High(LRemove)]:=I;
@@ -237,7 +238,11 @@ begin
   begin
     LProportionalWeight:=Trunc(NativeInt(High(TWeight)) / FWeightList.Count);
     for I:=0 to Pred(FWeightList.Count) do
-      FWeightList[I].Weight:=LProportionalWeight;
+    begin
+      LWeightEntry:=FWeightList[I];
+      LWeightEntry.Weight:=LProportionalWeight;
+      FWeightList[I]:=LWeightEntry;
+    end;
     LRemainder:=Round(Frac(NativeInt(High(TWeight)) / FWeightList.Count) * FWeightList.Count);
     //distribute any remainder amounts randomly
     if LRemainder>0 then
@@ -245,9 +250,13 @@ begin
     While LRemainder>0 do
     begin
       I:=RandomRange(0,FWeightList.Count);
+      LWeightEntry:=FWeightList[I];
       //don't increase if we are already at the cap
-      if not Succ(NativeInt(FWeightList[I].Weight))>High(TWeight) then
-        FWeightList[I].Weight:=FWeightList[I].Weight + 1;
+      if not Succ(NativeInt(LWeightEntry.Weight))>High(TWeight) then
+      begin
+        LWeightEntry.Weight:=Succ(LWeightEntry.Weight);
+        FWeightList[I]:=LWeightEntry;
+      end;
       Dec(LRemainder);
     end;
   end;
@@ -266,7 +275,7 @@ var
   I,J:Integer;
   LMap:TWeightMap;
   LEntry:TWeightEntry;
-  LWeight:Integer;
+  LWeight:TWeight;
 begin
   //derp, drinking beer
   if AEntries.Count<1 then
@@ -286,20 +295,20 @@ begin
       LEntry.Model:=@AEntries[I].Model;
       if FWeightList.IndexOf(LEntry)<0 then
         Continue;
-      LWeight:=FWeightList[FWeightList.IndexOf(LEntry)].Weight;
+      LEntry:=FWeightList[FWeightList.IndexOf(LEntry)];
       //if we haven't seen this classification yet, add it
       if not LMap.Find(AEntries[I].Classification,J) then
       begin
         LMap.Add(
           AEntries[I].Classification,
-          TWeight(LWeight)
+          LEntry.Weight
         );
         Continue;
       end;
       //for classifications we have already seen, we want to add the weights
       //together (making sure not to surpass max
-      if (LWeight+LMap.Data[J])<=High(TWeight) then
-        LMap.Data[J]:=LMap.Data[J] + LWeight
+      if (NativeInt(LEntry.Weight)+LMap.Data[J])<=High(TWeight) then
+        LMap.Data[J]:=LMap.Data[J] + LEntry.Weight
       else
         LMap.Data[J]:=High(TWeight);
     end;
