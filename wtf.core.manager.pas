@@ -62,9 +62,11 @@ type
       private
         FModel:PWeightModel;
         FWeight:TWeight;
+        procedure SetWeight(Const AValue:TWeight);
+        function GetWeight:TWeight;
       public
         property Model : PWeightModel read FModel write FModel;
-        property Weight : TWeight read FWeight write FWeight;
+        property Weight : TWeight read GetWeight write SetWeight;
         class operator Equal(Const a, b : TWeightEntry) : Boolean;
       end;
       TWeightList =
@@ -134,10 +136,21 @@ begin
 end;
 
 { TWeightEntry }
+procedure TModelManagerImpl<TData,TClassification>.TWeightEntry.SetWeight(Const AValue:TWeight);
+begin
+  FWeight:=AValue;
+end;
+
+function TModelManagerImpl<TData,TClassification>.TWeightEntry.GetWeight:TWeight;
+begin
+  Result:=FWeight;
+end;
 
 class operator TModelManagerImpl<TData,TClassification>.TWeightEntry.Equal(Const a, b : TWeightEntry) : Boolean;
 begin
-  Result:=@a.Model^=@b.Model^;
+  Result:=False;
+  if a.Model^=b.Model^ then
+    Result:=True;
 end;
 
 { TModelManagerImpl }
@@ -155,6 +168,7 @@ end;
 procedure TModelManagerImpl<TData,TClassification>.VerifyModels(Const AEntries:TVoteEntries);
 var
   I,J:Integer;
+  LFound:Boolean;
   LRebalance:Boolean;
   LProportionalWeight:Integer;
   LRemainder:Integer;
@@ -179,7 +193,8 @@ begin
         LRebalance:=True;
     end;
   end;
-  //next, make sure we remove any invalid entries
+  //next, make sure we remove any invalid entries by grabbing the affected index
+  //and storing in our tracking array
   for I:=0 to Pred(FWeightList.Count) do
   begin
     //first case is the model pointer we have has been removed
@@ -189,26 +204,33 @@ begin
       LRemove[High(LRemove)]:=I;
       if not LRebalance then
         LRebalance:=True;
+      Continue;
     end;
-    //next case, is that a model has been removed from the model collection
-    //and is not in the entries, so we remove it
-    if not AEntries.Count<>FWeightList.Count then
+    //look in the entries list for this weight entry, and if we cannot
+    //find it, it's a candidate for deletion
+    LFound:=False;
+    for J:=0 to Pred(AEntries.Count) do
     begin
-      for J:=0 to Pred(AEntries.Count) do
+      if FWeightList[I].Model^<>AEntries[J].Model then
+        Continue
+      else
       begin
-        if not Assigned(AEntries[J].Model) then
-          Continue;
-        LWeightEntry.Model:=@AEntries[J].Model;
-        if FWeightList.IndexOf(LWeightEntry)<0 then
-        begin
-          SetLength(LRemove,Succ(Length(LRemove)));
-          LRemove[High(LRemove)]:=I;
-          if not LRebalance then
-            LRebalance:=True;
-        end;
+        LFound:=True;
+        break;
       end;
     end;
+    if not LFound then
+    begin
+      SetLength(LRemove,Succ(Length(LRemove)));
+      LRemove[High(LRemove)]:=I;
+      if not LRebalance then
+        LRebalance:=True;
+      Continue;
+    end;
   end;
+  //remove all invalid weighted entries
+  for I:=0 to High(LRemove) do
+    FWeightList.Delete(LRemove[I]);
   //lastly if we need to rebalance the weights, do so in a proportional manner,
   //may need to change in the future to guage off of prior weights..
   if LRebalance then
@@ -244,7 +266,7 @@ var
   I,J:Integer;
   LMap:TWeightMap;
   LEntry:TWeightEntry;
-  LHighest:TWeight;
+  LWeight:Integer;
 begin
   //derp, drinking beer
   if AEntries.Count<1 then
@@ -264,28 +286,34 @@ begin
       LEntry.Model:=@AEntries[I].Model;
       if FWeightList.IndexOf(LEntry)<0 then
         Continue;
+      LWeight:=FWeightList[FWeightList.IndexOf(LEntry)].Weight;
       //if we haven't seen this classification yet, add it
       if not LMap.Find(AEntries[I].Classification,J) then
       begin
         LMap.Add(
           AEntries[I].Classification,
-          FWeightList[FWeightList.IndexOf(LEntry)].Weight
+          TWeight(LWeight)
         );
         Continue;
       end;
-      //add the weights together
-      LMap.Data[J]:=LMap.Data[J] + FWeightList[FWeightList.IndexOf(LEntry)].Weight
+      //for classifications we have already seen, we want to add the weights
+      //together (making sure not to surpass max
+      if (LWeight+LMap.Data[J])<=High(TWeight) then
+        LMap.Data[J]:=LMap.Data[J] + LWeight
+      else
+        LMap.Data[J]:=High(TWeight);
     end;
-    //could use a compare to sort desc, but can't do nested procs for generics,
-    //so would need to define tweight outside of class...being lazy
+    //init to our first entries values
     Result:=LMap.Keys[0];
-    LHighest:=LMap.Data[0];
+    LWeight:=LMap.Data[0];
+    //now find the classification with the highest weight and return it
+    //as our "true" result
     for I:=0 to Pred(LMap.Count) do
     begin
-      if LMap.Data[I]>LHighest then
+      if LMap.Data[I]>LWeight then
       begin
         Result:=LMap.Keys[I];
-        LHighest:=LMap.Data[I];
+        LWeight:=LMap.Data[I];
       end;
     end;
   finally
@@ -418,7 +446,8 @@ var
   I,J,K:Integer;
   LEntries:TVoteEntries;
   LCorrect, LIncorrect:TVoteEntries;
-  LReward:TWeight;
+  LReward:Integer;
+  LCurWeight:Integer;
   LEntry:TWeightEntry;
   LImbalance:Boolean;
 begin
@@ -505,11 +534,15 @@ begin
         K:=FWeightList.IndexOf(LEntry);
         if K<0 then
           Continue;
-        if Pred(Integer(FWeightList[K].Weight))<MIN_WEIGHT then
+        //get the current weight for our incorrect entry
+        LCurWeight:=FWeightList[K].Weight;
+        //bounds checks to make sure we don't take away more than min
+        if Pred(LCurWeight)<MIN_WEIGHT then
           Continue;
-        if Succ(Integer(LReward))>MAX_WEIGHT then
+        //reward should be more than the max range of a weight
+        if Succ(LReward)>MAX_WEIGHT then
           Break;
-        FWeightList[K].Weight:=Pred(FWeightList[K].Weight);
+        FWeightList[K].Weight:=Pred(LCurWeight);
         Inc(LReward);
       end;
       //reset counter and check for imbalance
@@ -526,9 +559,10 @@ begin
           K:=FWeightList.IndexOf(LEntry);
           if K<0 then
             Continue;
-          if Succ(Integer(FWeightList[K].Weight))>MAX_WEIGHT then
+          LCurWeight:=FWeightList[K].Weight;
+          if Succ(LCurWeight)>MAX_WEIGHT then
             Continue;
-          FWeightList[K].Weight:=Pred(FWeightList[K].Weight);
+          FWeightList[K].Weight:=Pred(LCurWeight);
           Dec(LReward);
         end
         else
@@ -537,9 +571,10 @@ begin
           K:=FWeightList.IndexOf(LEntry);
           if K<0 then
             Continue;
-          if Succ(Integer(FWeightList[K].Weight))>MAX_WEIGHT then
+          LCurWeight:=FWeightList[K].Weight;
+          if Succ(LCurWeight)>MAX_WEIGHT then
             Continue;
-          FWeightList[K].Weight:=Pred(FWeightList[K].Weight);
+          FWeightList[K].Weight:=Pred(LCurWeight);
           Dec(LReward);
           //make sure we don't go out of bounds of correct list
           Inc(J);
