@@ -240,7 +240,7 @@ begin
     for I:=0 to Pred(FWeightList.Count) do
     begin
       LWeightEntry:=FWeightList[I];
-      LWeightEntry.Weight:=LProportionalWeight;
+      LWeightEntry.Weight:=TWeight(LProportionalWeight);
       FWeightList[I]:=LWeightEntry;
     end;
     LRemainder:=Round(Frac(NativeInt(High(TWeight)) / FWeightList.Count) * FWeightList.Count);
@@ -254,7 +254,7 @@ begin
       //don't increase if we are already at the cap
       if not Succ(NativeInt(LWeightEntry.Weight))>High(TWeight) then
       begin
-        LWeightEntry.Weight:=Succ(LWeightEntry.Weight);
+        LWeightEntry.Weight:=TWeight(Succ(LWeightEntry.Weight));
         FWeightList[I]:=LWeightEntry;
       end;
       Dec(LRemainder);
@@ -456,7 +456,6 @@ var
   LEntries:TVoteEntries;
   LCorrect, LIncorrect:TVoteEntries;
   LReward:Integer;
-  LCurWeight:Integer;
   LEntry:TWeightEntry;
   LImbalance:Boolean;
 begin
@@ -544,14 +543,15 @@ begin
         if K<0 then
           Continue;
         //get the current weight for our incorrect entry
-        LCurWeight:=FWeightList[K].Weight;
+        LEntry:=FWeightList[K];
         //bounds checks to make sure we don't take away more than min
-        if Pred(LCurWeight)<MIN_WEIGHT then
+        if Pred(NativeInt(LEntry.Weight))<MIN_WEIGHT then
           Continue;
         //reward should be more than the max range of a weight
         if Succ(LReward)>MAX_WEIGHT then
           Break;
-        FWeightList[K].Weight:=Pred(LCurWeight);
+        LEntry.Weight:=TWeight(Pred(LEntry.Weight));
+        FWeightList[K]:=LEntry;
         Inc(LReward);
       end;
       //reset counter and check for imbalance
@@ -560,35 +560,42 @@ begin
         LImbalance:=True;
       While LReward>MIN_WEIGHT do
       begin
-        if LImbalance then
-        begin
-          Randomize;
-          J:=RandomRange(0,LCorrect.Count);
-          LEntry.Model:=@LCorrect[J].Model;
-          K:=FWeightList.IndexOf(LEntry);
-          if K<0 then
-            Continue;
-          LCurWeight:=FWeightList[K].Weight;
-          if Succ(LCurWeight)>MAX_WEIGHT then
-            Continue;
-          FWeightList[K].Weight:=Pred(LCurWeight);
+        //in the situation of an imbalance of reward points (less/more points
+        //then can be given to all correct)
+        try
+          if LImbalance then
+          begin
+            Randomize;
+            J:=RandomRange(0,LCorrect.Count);
+            LEntry.Model:=@LCorrect[J].Model;
+            K:=FWeightList.IndexOf(LEntry);
+            if K<0 then
+              Continue;
+            LEntry:=FWeightList[K];
+            if Succ(NativeInt(LEntry.Weight))>MAX_WEIGHT then
+              Continue;
+            LEntry.Weight:=TWeight(Succ(LEntry.Weight));
+            FWeightList[K]:=LEntry;
+          end
+          else
+          begin
+            LEntry.Model:=@LCorrect[J].Model;
+            K:=FWeightList.IndexOf(LEntry);
+            if K<0 then
+              Continue;
+            LEntry:=FWeightList[K];
+            if Succ(NativeInt(LEntry.Weight))>MAX_WEIGHT then
+              Continue;
+            LEntry.Weight:=TWeight(Succ(LEntry.Weight));
+            FWeightList[K]:=LEntry;
+            //make sure we don't go out of bounds of correct list
+            Inc(J);
+            if J>Pred(LCorrect.Count) then
+              J:=0;
+          end;
+        finally
+          //lastly, for each loop iteration that completes, remove a point
           Dec(LReward);
-        end
-        else
-        begin
-          LEntry.Model:=@LCorrect[J].Model;
-          K:=FWeightList.IndexOf(LEntry);
-          if K<0 then
-            Continue;
-          LCurWeight:=FWeightList[K].Weight;
-          if Succ(LCurWeight)>MAX_WEIGHT then
-            Continue;
-          FWeightList[K].Weight:=Pred(LCurWeight);
-          Dec(LReward);
-          //make sure we don't go out of bounds of correct list
-          Inc(J);
-          if J>Pred(LCorrect.Count) then
-            J:=0;
         end;
       end;
       Result:=True;
