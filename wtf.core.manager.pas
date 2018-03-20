@@ -39,6 +39,11 @@ type
   *)
   TModelManagerImpl<TData,TClassification> = class(TPersistableImpl,IModelManager<TData,TClassification>)
   private
+    const
+      PROP_MODELS = 'models';
+      PROP_WEIGHT = 'weight';
+      PROP_MODEL = 'model';
+  private
     type
       TSpecializedVoteEntry = TVoteEntry<TData,TClassification>;
       TVoteEntries =
@@ -407,15 +412,28 @@ begin
 end;
 
 procedure TModelManagerImpl<TData,TClassification>.DoPersist;
+var
+  I:Integer;
+  LArr:TJSONArray;
 begin
   inherited DoPersist;
   { TODO 1 : write all properties to json }
+  LArr:=TJSONArray.Create;
+  try
+    for I := 0 to Pred(FWeightList.Count) do
+    begin
+      LArr.Add(PROP_WEIGHT,FWeightList[I].Weight);
+      LArr.Add(PROP_MODEL,FWeightList[I].Model^.JSONPersist.ToJSON);
+    end;
+  finally
+    LArr.Free;
+  end;
 end;
 
 procedure TModelManagerImpl<TData,TClassification>.DoReload;
 begin
   inherited DoReload;
-  { TODO 2 : read all properties from json }
+  { TODO 2 : read all properties from json. need to account for dupe models being used (should be ok to do so) }
 end;
 
 function TModelManagerImpl<TData,TClassification>.GetModels: TModels<TData,TClassification>;

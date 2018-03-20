@@ -191,7 +191,11 @@ begin
               Continue;
           end;
           //grab raw string value
-          LPair.Value:=LObj.Items[I].AsString;
+          if not (LPair.PersistType in [ptArray,ptObject]) then
+            LPair.Value:=LObj.Items[I].AsString
+          //otherwise, this will raise an exception, so provide json string
+          else
+            LPair.Value:=LObj.Items[I].AsJSON;
           FMap.Add(LObj.Names[I],LPair);
         end;
       end;
