@@ -98,6 +98,7 @@ type
     function GetWeightedClassification(Const AEntries:TVoteEntries) : TClassification;
     procedure VerifyModels(Const AEntries:TVoteEntries);
     function ComparePayload(Const A, B : PClassifierPubPayload):TComparisonOperator;
+    function GetModelWeight(Const AModel:IModel<TData,TClassification>):TWeight;
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
@@ -163,6 +164,19 @@ begin
 end;
 
 { TModelManagerImpl }
+
+function TModelManagerImpl<TData,TClassification>.GetModelWeight(Const AModel:IModel<TData,TClassification>):TWeight;
+var
+  I:Integer;
+  LEntry:TWeightEntry;
+begin
+  Result:=Low(TWeight);
+  LEntry.Model:=@AModel;
+  I:=FWeightList.IndexOf(LEntry);
+  if I<0 then
+    Exit;
+  Result:=FWeightList[I].Weight;
+end;
 
 function TModelManagerImpl<TData,TClassification>.ComparePayload(Const A, B : PClassifierPubPayload):TComparisonOperator;
 begin
@@ -421,17 +435,19 @@ var
   LModel:IModel<TData,TClassification>;
   LArr:TJSONArray;
   LObj:TJSONObject;
+  LWeight:TWeight;
   LError:String;
 begin
   inherited DoPersist;
   LArr:=TJSONArray.Create;
   LObj:=TJSONObject.Create;
   try
-    for I := 0 to Pred(FWeightList.Count) do
+    for I := 0 to Pred(FModels.Collection.Count) do
     begin
-      LModel:=FWeightList[I].Model^;
+      LModel:=FModels.Collection[I];
+      LWeight:=GetModelWeight(LModel);
       LObj.Clear;
-      LObj.Add(PROP_WEIGHT,IntToStr(FWeightList[I].Weight));
+      LObj.Add(PROP_WEIGHT,IntToStr(LWeight));
       LArr.Add(LObj.AsJSON);
       LObj.Clear;
       LObj.Add(PROP_MODEL,LModel.JSONPersist.ToJSON);
