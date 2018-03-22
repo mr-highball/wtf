@@ -43,6 +43,7 @@ var
   LError:String;
 begin
   inherited;
+  (* For now, we don't need the feeder data, perhaps make this configurable to allow full copies
   if not JSONPersist.StoreProperty(
     PERSIST_ID_FEEDER,
     DataFeeder.JSONPersist.ToJSON,
@@ -50,6 +51,7 @@ begin
     LError
   ) then
     Exit; //todo - log errors
+  *)
 end;
 
 function TModelImpl<TData,TClassification>.GetClassifier: IClassifier<TData,TClassification>;
