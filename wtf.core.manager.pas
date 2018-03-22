@@ -120,7 +120,11 @@ type
 
 implementation
 uses
-  wtf.core.subscriber, math;
+  wtf.core.subscriber, math,
+  {$IFDEF FPC}
+  fpjson
+  {$ELSE}
+  {$ENDIF};
 
 { TVoteEntry }
 
@@ -414,19 +418,30 @@ end;
 procedure TModelManagerImpl<TData,TClassification>.DoPersist;
 var
   I:Integer;
+  LModel:IModel<TData,TClassification>;
   LArr:TJSONArray;
+  LObj:TJSONObject;
+  LError:String;
 begin
   inherited DoPersist;
-  { TODO 1 : write all properties to json }
   LArr:=TJSONArray.Create;
+  LObj:=TJSONObject.Create;
   try
     for I := 0 to Pred(FWeightList.Count) do
     begin
-      LArr.Add(PROP_WEIGHT,FWeightList[I].Weight);
-      LArr.Add(PROP_MODEL,FWeightList[I].Model^.JSONPersist.ToJSON);
+      LModel:=FWeightList[I].Model^;
+      LObj.Clear;
+      LObj.Add(PROP_WEIGHT,IntToStr(FWeightList[I].Weight));
+      LArr.Add(LObj.AsJSON);
+      LObj.Clear;
+      LObj.Add(PROP_MODEL,LModel.JSONPersist.ToJSON);
+      LArr.Add(LObj.AsJSON);
     end;
+    if not JSONPersist.StoreProperty(PROP_MODELS,LArr.AsJSON,ptArray,LError) then
+      raise Exception.Create(LError);
   finally
     LArr.Free;
+    LObj.Free;
   end;
 end;
 
