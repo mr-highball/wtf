@@ -331,6 +331,8 @@ type
     destructor Destroy; override;
   end;
 
+  TWeight = 0..100;
+
   { IModelManager }
   (*
     A model manager is responsible for feeding data to it's model collection,
@@ -352,6 +354,10 @@ type
       Const AIdentifier:TIdentifier):Boolean;overload;
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier; Out Error:String):Boolean;overload;
+    function UpdateWeight(Const AModel : TModels<TData,TClassification>.IModelEntry;
+      Const AWeight:TWeight):Boolean;overload;
+    function UpdateWeight(Const AModel : TModels<TData,TClassification>.IModelEntry;
+      Const AWeight:TWeight; Out Error:String):Boolean;overload;
   end;
 
 implementation

@@ -61,7 +61,6 @@ type
         //delphi dictionary should be able to handle guid as key
         TObjectDictionary<TIdentifier,TSpecializedVoteEntry>;
         {$ENDIF}
-      TWeight = 0..100;
       PWeightModel = ^IModel<TData,TClassification>;
       TWeightEntry = record
       private
@@ -115,6 +114,10 @@ type
       Const AIdentifier:TIdentifier):Boolean;overload;
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier; Out Error:String):Boolean;overload;
+    function UpdateWeight(Const AModel : TModels<TData,TClassification>.IModelEntry;
+      Const AWeight:TWeight):Boolean;overload;
+    function UpdateWeight(Const AModel : TModels<TData,TClassification>.IModelEntry;
+      Const AWeight:TWeight; Out Error:String):Boolean;overload;
     constructor Create;override;
     destructor Destroy;override;
   end;
@@ -164,6 +167,97 @@ begin
 end;
 
 { TModelManagerImpl }
+
+function TModelManagerImpl<TData,TClassification>.UpdateWeight(
+  Const AModel : TModels<TData,TClassification>.IModelEntry;
+  Const AWeight:TWeight):Boolean;overload;
+var
+  LError:String;
+begin
+  Result:=UpdateWeight(AModel,AWeight,LError);
+end;
+
+function TModelManagerImpl<TData,TClassification>.UpdateWeight(
+  Const AModel : TModels<TData,TClassification>.IModelEntry;
+  Const AWeight:TWeight;Out Error:String):Boolean;overload;
+var
+  I,J:Integer;
+  LEntry:TWeightEntry;
+  LTotal:Integer;
+  LDist:Integer;
+begin
+  Result:=False;
+  try
+    LEntry.Model:=@AModel;
+    I:=FWeightList.IndexOf(LEntry);
+    if I<0 then
+    begin
+      Error:='could not find model to update weight';
+      Exit;
+    end;
+    //to maintain a balanced list, we need to know how much we are offsetting
+    //the system, in order to distribute (neg or pos)
+    LTotal:=Low(TWeight);
+    for J:=0 to Pred(FWeightList.Count) do
+      Inc(LTotal,NativeInt(FWeightList[J].Weight));
+    if LTotal=Low(TWeight) then
+      LTotal:=High(TWeight);
+    //a system with only "this" model being used is a special case
+    if FWeightList.Count=1 then
+    begin
+      LEntry.Weight:=LTotal;
+      FWeightList[I]:=LEntry;
+    end
+    else
+    begin
+      LEntry.Weight:=AWeight;
+      FWeightList[I]:=LEntry;
+      //find the amount we need to distribute to remaining models
+      LDist:=NativeInt(AWeight) - NativeInt(FWeightList[I].Weight);
+      while LDist<>0 do
+      begin
+        if FWeightList.Count<=1 then
+          Break;
+        for J := 0 to Pred(FWeightList.Count) do
+        begin
+          //skip the model we already assigned the weight to
+          if J=I then
+            Continue;
+          //if distribution is postive, we need to take away from other models
+          if LDist>0 then
+          begin
+            if not Pred(NativeInt(FWeightList[J].Weight))<Low(TWeight) then
+            begin
+              //decrement current weight
+              LEntry.Model:=FWeightList[J].Model;
+              LEntry.Weight:=TWeight(Pred(NativeInt(FWeightList[J].Weight)));
+              FWeightList[J]:=LEntry;
+            end;
+            Dec(LDist);
+          end
+          //otherwise, we need to add to other models
+          else if LDist<0 then
+          begin
+            if not Pred(NativeInt(FWeightList[J].Weight))>High(TWeight) then
+            begin
+              //increment current weight
+              LEntry.Model:=FWeightList[J].Model;
+              LEntry.Weight:=TWeight(Succ(NativeInt(FWeightList[J].Weight)));
+              FWeightList[J]:=LEntry;
+            end;
+            Inc(LDist);
+          end
+          //finished distributing, break
+          else
+            break;
+        end;
+      end;
+    end;
+    Result:=True;
+  except on E:Exception do
+    Error:=E.Message;
+  end;
+end;
 
 function TModelManagerImpl<TData,TClassification>.GetModelWeight(Const AModel:IModel<TData,TClassification>):TWeight;
 var
@@ -464,7 +558,7 @@ end;
 procedure TModelManagerImpl<TData,TClassification>.DoReload;
 begin
   inherited DoReload;
-  { TODO 2 : read all properties from json. need to account for dupe models being used (should be ok to do so) }
+  //here, we make no assumptions about persisting and leave it up to children
 end;
 
 function TModelManagerImpl<TData,TClassification>.GetModels: TModels<TData,TClassification>;

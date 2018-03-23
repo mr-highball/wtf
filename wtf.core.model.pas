@@ -33,14 +33,14 @@ type
   end;
 
 implementation
-uses
-  wtf.core.consts;
+(*uses
+  wtf.core.consts;*)
 
 { TModel }
 
 procedure TModelImpl<TData,TClassification>.DoPersist;
-var
-  LError:String;
+(*var
+  LError:String;*)
 begin
   inherited;
   (* For now, we don't need the feeder data, perhaps make this configurable to allow full copies
