@@ -541,11 +541,9 @@ begin
       LModel:=FModels.Collection[I];
       LWeight:=GetModelWeight(LModel);
       LObj.Clear;
-      LObj.Add(PROP_WEIGHT,IntToStr(LWeight));
-      LArr.Add(LObj.AsJSON);
-      LObj.Clear;
-      LObj.Add(PROP_MODEL,LModel.JSONPersist.ToJSON);
-      LArr.Add(LObj.AsJSON);
+      LObj.Add(PROP_WEIGHT,NativeInt(LWeight));
+      LObj.Add(PROP_MODEL,GetJSON(LModel.JSONPersist.ToJSON));
+      LArr.Add(GetJSON(LObj.AsJSON));
     end;
     if not JSONPersist.StoreProperty(PROP_MODELS,LArr.AsJSON,ptArray,LError) then
       raise Exception.Create(LError);
