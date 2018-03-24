@@ -114,9 +114,9 @@ type
       Const AIdentifier:TIdentifier):Boolean;overload;
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier; Out Error:String):Boolean;overload;
-    function UpdateWeight(Const AModel : TModels<TData,TClassification>.IModelEntry;
+    function UpdateWeight(Const AModel : IModel<TData,TClassification>;
       Const AWeight:TWeight):Boolean;overload;
-    function UpdateWeight(Const AModel : TModels<TData,TClassification>.IModelEntry;
+    function UpdateWeight(Const AModel : IModel<TData,TClassification>;
       Const AWeight:TWeight; Out Error:String):Boolean;overload;
     constructor Create;override;
     destructor Destroy;override;
@@ -169,7 +169,7 @@ end;
 { TModelManagerImpl }
 
 function TModelManagerImpl<TData,TClassification>.UpdateWeight(
-  Const AModel : TModels<TData,TClassification>.IModelEntry;
+  Const AModel : IModel<TData,TClassification>;
   Const AWeight:TWeight):Boolean;overload;
 var
   LError:String;
@@ -178,7 +178,7 @@ begin
 end;
 
 function TModelManagerImpl<TData,TClassification>.UpdateWeight(
-  Const AModel : TModels<TData,TClassification>.IModelEntry;
+  Const AModel : IModel<TData,TClassification>;
   Const AWeight:TWeight;Out Error:String):Boolean;overload;
 var
   I,J:Integer;
