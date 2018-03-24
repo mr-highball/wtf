@@ -38,7 +38,7 @@ type
     Base implementation of the IModelManager interface
   *)
   TModelManagerImpl<TData,TClassification> = class(TPersistableImpl,IModelManager<TData,TClassification>)
-  private
+  public
     const
       PROP_MODELS = 'models';
       PROP_WEIGHT = 'weight';
@@ -195,6 +195,7 @@ begin
       Error:='could not find model to update weight';
       Exit;
     end;
+    LEntry:=FWeightList[I];
     //to maintain a balanced list, we need to know how much we are offsetting
     //the system, in order to distribute (neg or pos)
     LTotal:=Low(TWeight);
@@ -210,10 +211,11 @@ begin
     end
     else
     begin
-      LEntry.Weight:=AWeight;
-      FWeightList[I]:=LEntry;
       //find the amount we need to distribute to remaining models
       LDist:=NativeInt(AWeight) - NativeInt(FWeightList[I].Weight);
+      //safe to assign to this entry now
+      LEntry.Weight:=AWeight;
+      FWeightList[I]:=LEntry;
       while LDist<>0 do
       begin
         if FWeightList.Count<=1 then
