@@ -20,6 +20,7 @@ type
     function GetSupportedClassifiers : TClassifierArray<TClassification>;
     function GetPublisher : IClassificationPublisher;
   protected
+    function GetFeeder : IDataFeeder<TData>;
     //children classes will need to override below methods
     function DoGetSupportedClassifiers : TClassifierArray<TClassification>;virtual;abstract;
     function DoClassify(Const ARepository:TDataRepository<TData>) : TClassification;virtual;abstract;
@@ -40,6 +41,11 @@ uses
   wtf.core.publisher;
 
 { TClassifierImpl }
+
+function TClassifierImpl<TData,TClassification>.GetFeeder : IDataFeeder<TData>;
+begin
+  Result:=FFeeder;
+end;
 
 procedure TClassifierImpl<TData,TClassification>.UpdateDataFeeder(Const ADataFeeder : IDataFeeder<TData>);
 begin
