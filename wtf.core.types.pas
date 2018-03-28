@@ -345,10 +345,13 @@ type
     function GetModels: TModels<TData,TClassification>;
     function GetDataFeeder : IDataFeeder<TData>;
     function GetClassifier : IClassifier<TData,TClassification>;
+    function GetMaxHistory : Cardinal;
+    procedure SetMaxHistory(Const AValue:Cardinal);
     //properties
     property Models : TModels<TData,TClassification> read GetModels;
     property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     property Classifier : IClassifier<TData,TClassification> read GetClassifier;
+    property MaxHistory : Cardinal read GetMaxHistory write SetMaxHistory;
     //methods
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier):Boolean;overload;
@@ -358,6 +361,8 @@ type
       Const AWeight:TWeight):Boolean;overload;
     function UpdateWeight(Const AModel : IModel<TData,TClassification>;
       Const AWeight:TWeight; Out Error:String):Boolean;overload;
+    procedure ClearHistory;overload;
+    procedure ClearHistory(Const AIdentifier:TIdentifier);overload;
   end;
 
 implementation

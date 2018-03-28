@@ -89,6 +89,7 @@ type
     FPreClass : TClassifierPubPayload;
     FAlterClass : TClassifierPubPayload;
     FWeightList : TWeightList;
+    FMaxHistory : Cardinal;
     function GetModels: TModels<TData,TClassification>;
     function GetDataFeeder : IDataFeeder<TData>;
     function GetClassifier : IClassifier<TData,TClassification>;
@@ -98,6 +99,8 @@ type
     procedure VerifyModels(Const AEntries:TVoteEntries);
     function ComparePayload(Const A, B : PClassifierPubPayload):TComparisonOperator;
     function GetModelWeight(Const AModel:IModel<TData,TClassification>):TWeight;
+    function GetMaxHistory : Cardinal;
+    procedure SetMaxHistory(Const AValue:Cardinal);
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
@@ -109,6 +112,7 @@ type
     property Models : TModels<TData,TClassification> read GetModels;
     property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     property Classifier : IClassifier<TData,TClassification> read GetClassifier;
+    property MaxHistory : Cardinal read GetMaxHistory write SetMaxHistory;
     //methods
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier):Boolean;overload;
@@ -118,6 +122,8 @@ type
       Const AWeight:TWeight):Boolean;overload;
     function UpdateWeight(Const AModel : IModel<TData,TClassification>;
       Const AWeight:TWeight; Out Error:String):Boolean;overload;
+    procedure ClearHistory;overload;
+    procedure ClearHistory(Const AIdentifier:TIdentifier);overload;
     constructor Create;override;
     destructor Destroy;override;
   end;
@@ -167,6 +173,33 @@ begin
 end;
 
 { TModelManagerImpl }
+
+function TModelManagerImpl<TData,TClassification>.GetMaxHistory : Cardinal;
+begin
+  Result:=FMaxHistory;
+end;
+
+procedure TModelManagerImpl<TData,TClassification>.SetMaxHistory(Const AValue:Cardinal);
+begin
+  FMaxHistory:=AValue;
+end;
+
+procedure TModelManagerImpl<TData,TClassification>.ClearHistory;overload;
+begin
+  FVoteMap.Clear;
+end;
+
+procedure TModelManagerImpl<TData,TClassification>.ClearHistory(Const AIdentifier:TIdentifier);overload;
+var
+  I:Integer;
+begin
+  if not FVoteMap.Sorted then
+    FVoteMap.Sorted:=True;
+  FVoteMap.Find(AIdentifier.ToString,I);
+  if I<0 then
+    Exit;
+  FVoteMap.Delete(I);
+end;
 
 function TModelManagerImpl<TData,TClassification>.UpdateWeight(
   Const AModel : IModel<TData,TClassification>;
@@ -463,6 +496,9 @@ begin
   if AMessage.PublicationType=cpPreClassify then
   begin
     LEntries:=TVoteEntries.Create(True);
+    //respect max history of classifications if asked to
+    if (FMaxHistory>0) and (Succ(Cardinal(FVoteMap.Count))>FMaxHistory) then
+      FVoteMap.Delete(0);
     //capture the identifier our classifier generated and use it as a key
     FVoteMap.Add(AMessage.ID.ToString,LEntries);
   end
@@ -759,6 +795,7 @@ var
   LClassifier:TClassifierImpl<TData,TClassification>;
 begin
   inherited Create;
+  FMaxHistory:=0;
   FDataFeeder:=InitDataFeeder;
   //subscribe to feeder
   FDataFeederSubscriber:=TSubscriberImpl<TDataFeederPublication>.Create;
