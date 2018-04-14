@@ -90,6 +90,7 @@ type
     FAlterClass : TClassifierPubPayload;
     FWeightList : TWeightList;
     FMaxHistory : Cardinal;
+    FLocked : Boolean;
     function GetModels: TModels<TData,TClassification>;
     function GetDataFeeder : IDataFeeder<TData>;
     function GetClassifier : IClassifier<TData,TClassification>;
@@ -101,6 +102,8 @@ type
     function GetModelWeight(Const AModel:IModel<TData,TClassification>):TWeight;
     function GetMaxHistory : Cardinal;
     procedure SetMaxHistory(Const AValue:Cardinal);
+    function GetLocked : Boolean;
+    procedure SetLocked(Const AValue:Boolean);
   protected
     //children need to override these methods
     function InitDataFeeder : TDataFeederImpl<TData>;virtual;abstract;
@@ -113,6 +116,7 @@ type
     property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     property Classifier : IClassifier<TData,TClassification> read GetClassifier;
     property MaxHistory : Cardinal read GetMaxHistory write SetMaxHistory;
+    property Locked : Boolean read GetLocked write SetLocked;
     //methods
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier):Boolean;overload;
@@ -174,6 +178,16 @@ end;
 
 { TModelManagerImpl }
 
+function TModelManagerImpl<TData,TClassification>.GetLocked : Boolean;
+begin
+  Result:=FLocked;
+end;
+
+procedure TModelManagerImpl<TData,TClassification>.SetLocked(Const AValue:Boolean);
+begin
+  FLocked:=AValue;
+end;
+
 function TModelManagerImpl<TData,TClassification>.GetMaxHistory : Cardinal;
 begin
   Result:=FMaxHistory;
@@ -221,6 +235,11 @@ var
 begin
   Result:=False;
   try
+    if Flocked then
+    begin
+      Error:='weights have been locked, unlock first';
+      Exit;
+    end;
     LEntry.Model:=@AModel;
     I:=FWeightList.IndexOf(LEntry);
     if I<0 then
@@ -670,117 +689,126 @@ begin
       Exit;
     end;
     {$endregion}
-    //in order to reward, will separate into two groups, one that
-    //provided the correct classification, and then those that didn't
-    LCorrect:=TVoteEntries.Create(True);
-    LIncorrect:=TVoteEntries.Create(True);
-    {$region splitting to groups}
-    try
-      for J:=0 to Pred(LEntries.Count) do
-      begin
-        if LEntries[J].Classification=ACorrectClassification then
-          LCorrect.Add(
-            TSpecializedVoteEntry.Create(
-              LEntries[J].Model,
-              LEntries[J].ID,
-              LEntries[J].Classification
+    if not Flocked then
+    begin
+      //in order to reward, will separate into two groups, one that
+      //provided the correct classification, and then those that didn't
+      LCorrect:=TVoteEntries.Create(True);
+      LIncorrect:=TVoteEntries.Create(True);
+      {$region splitting to groups}
+      try
+        for J:=0 to Pred(LEntries.Count) do
+        begin
+          if LEntries[J].Classification=ACorrectClassification then
+            LCorrect.Add(
+              TSpecializedVoteEntry.Create(
+                LEntries[J].Model,
+                LEntries[J].ID,
+                LEntries[J].Classification
+              )
             )
-          )
-        else
-          LIncorrect.Add(
-            TSpecializedVoteEntry.Create(
-              LEntries[J].Model,
-              LEntries[J].ID,
-              LEntries[J].Classification
-            )
-          )
-      end;
-      {$endregion}
-      {$region group checks}
-      //if no incorrect models, then we did good, nothing to re-weight
-      if LIncorrect.Count<1 then
-      begin
-        FVoteMap.Delete(I);
-        Result:=True;
-        Exit;
-      end;
-      //if every model was incorrect, we have nothing to reward
-      if LCorrect.Count<1 then
-      begin
-        FVoteMap.Delete(I);
-        Result:=True;
-        Exit;
-      end;
-      {$endregion}
-      {$region weighting logic}
-      //take weight away from incorrect and divy out to correct. there may
-      //be an imbalance of points here, so in this case, randomly distribute
-      for J:=0 to Pred(LIncorrect.Count) do
-      begin
-        LEntry.Model:=@LIncorrect[J].Model;
-        K:=FWeightList.IndexOf(LEntry);
-        if K<0 then
-          Continue;
-        //get the current weight for our incorrect entry
-        LEntry:=FWeightList[K];
-        //bounds checks to make sure we don't take away more than min
-        if Pred(NativeInt(LEntry.Weight))<MIN_WEIGHT then
-          Continue;
-        //reward should be more than the max range of a weight
-        if Succ(LReward)>MAX_WEIGHT then
-          Break;
-        LEntry.Weight:=TWeight(Pred(LEntry.Weight));
-        FWeightList[K]:=LEntry;
-        Inc(LReward);
-      end;
-      //reset counter and check for imbalance
-      J:=0;
-      if LReward<LCorrect.Count then
-        LImbalance:=True;
-      While LReward>MIN_WEIGHT do
-      begin
-        //in the situation of an imbalance of reward points (less/more points
-        //then can be given to all correct)
-        try
-          if LImbalance then
-          begin
-            Randomize;
-            J:=RandomRange(0,LCorrect.Count);
-            LEntry.Model:=@LCorrect[J].Model;
-            K:=FWeightList.IndexOf(LEntry);
-            if K<0 then
-              Continue;
-            LEntry:=FWeightList[K];
-            if Succ(NativeInt(LEntry.Weight))>MAX_WEIGHT then
-              Continue;
-            LEntry.Weight:=TWeight(Succ(LEntry.Weight));
-            FWeightList[K]:=LEntry;
-          end
           else
-          begin
-            LEntry.Model:=@LCorrect[J].Model;
-            K:=FWeightList.IndexOf(LEntry);
-            if K<0 then
-              Continue;
-            LEntry:=FWeightList[K];
-            if Succ(NativeInt(LEntry.Weight))>MAX_WEIGHT then
-              Continue;
-            LEntry.Weight:=TWeight(Succ(LEntry.Weight));
-            FWeightList[K]:=LEntry;
-            //make sure we don't go out of bounds of correct list
-            Inc(J);
-            if J>Pred(LCorrect.Count) then
-              J:=0;
-          end;
-        finally
-          //lastly, for each loop iteration that completes, remove a point
-          Dec(LReward);
+            LIncorrect.Add(
+              TSpecializedVoteEntry.Create(
+                LEntries[J].Model,
+                LEntries[J].ID,
+                LEntries[J].Classification
+              )
+            )
         end;
+        {$endregion}
+        {$region group checks}
+        //if no incorrect models, then we did good, nothing to re-weight
+        if LIncorrect.Count<1 then
+        begin
+          FVoteMap.Delete(I);
+          Result:=True;
+          Exit;
+        end;
+        //if every model was incorrect, we have nothing to reward
+        if LCorrect.Count<1 then
+        begin
+          FVoteMap.Delete(I);
+          Result:=True;
+          Exit;
+        end;
+        {$endregion}
+        {$region weighting logic}
+        //take weight away from incorrect and divy out to correct. there may
+        //be an imbalance of points here, so in this case, randomly distribute
+        for J:=0 to Pred(LIncorrect.Count) do
+        begin
+          LEntry.Model:=@LIncorrect[J].Model;
+          K:=FWeightList.IndexOf(LEntry);
+          if K<0 then
+            Continue;
+          //get the current weight for our incorrect entry
+          LEntry:=FWeightList[K];
+          //bounds checks to make sure we don't take away more than min
+          if Pred(NativeInt(LEntry.Weight))<MIN_WEIGHT then
+            Continue;
+          //reward should be more than the max range of a weight
+          if Succ(LReward)>MAX_WEIGHT then
+            Break;
+          LEntry.Weight:=TWeight(Pred(LEntry.Weight));
+          FWeightList[K]:=LEntry;
+          Inc(LReward);
+        end;
+        //reset counter and check for imbalance
+        J:=0;
+        if LReward<LCorrect.Count then
+          LImbalance:=True;
+        While LReward>MIN_WEIGHT do
+        begin
+          //in the situation of an imbalance of reward points (less/more points
+          //then can be given to all correct)
+          try
+            if LImbalance then
+            begin
+              Randomize;
+              J:=RandomRange(0,LCorrect.Count);
+              LEntry.Model:=@LCorrect[J].Model;
+              K:=FWeightList.IndexOf(LEntry);
+              if K<0 then
+                Continue;
+              LEntry:=FWeightList[K];
+              if Succ(NativeInt(LEntry.Weight))>MAX_WEIGHT then
+                Continue;
+              LEntry.Weight:=TWeight(Succ(LEntry.Weight));
+              FWeightList[K]:=LEntry;
+            end
+            else
+            begin
+              LEntry.Model:=@LCorrect[J].Model;
+              K:=FWeightList.IndexOf(LEntry);
+              if K<0 then
+                Continue;
+              LEntry:=FWeightList[K];
+              if Succ(NativeInt(LEntry.Weight))>MAX_WEIGHT then
+                Continue;
+              LEntry.Weight:=TWeight(Succ(LEntry.Weight));
+              FWeightList[K]:=LEntry;
+              //make sure we don't go out of bounds of correct list
+              Inc(J);
+              if J>Pred(LCorrect.Count) then
+                J:=0;
+            end;
+          finally
+            //lastly, for each loop iteration that completes, remove a point
+            Dec(LReward);
+          end;
+        end;
+        Result:=True;
+      finally
+        LCorrect.Free;
+        LIncorrect.Free;
       end;
+    end
+    else
+    begin
+      //if we are locked then all that needs to happen is skip the
+      //weight assignment logic and return true (but still remove from map)
       Result:=True;
-    finally
-      LCorrect.Free;
-      LIncorrect.Free;
     end;
     //remove vote entries from map after collecting feedback
     FVoteMap.Delete(I);
@@ -795,6 +823,7 @@ var
   LClassifier:TClassifierImpl<TData,TClassification>;
 begin
   inherited Create;
+  FLocked:=False;
   FMaxHistory:=0;
   FDataFeeder:=InitDataFeeder;
   //subscribe to feeder

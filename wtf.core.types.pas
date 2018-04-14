@@ -347,11 +347,14 @@ type
     function GetClassifier : IClassifier<TData,TClassification>;
     function GetMaxHistory : Cardinal;
     procedure SetMaxHistory(Const AValue:Cardinal);
+    function GetLocked : Boolean;
+    procedure SetLocked(Const AValue:Boolean);
     //properties
     property Models : TModels<TData,TClassification> read GetModels;
     property DataFeeder : IDataFeeder<TData> read GetDataFeeder;
     property Classifier : IClassifier<TData,TClassification> read GetClassifier;
     property MaxHistory : Cardinal read GetMaxHistory write SetMaxHistory;
+    property Locked : Boolean read GetLocked write SetLocked;
     //methods
     function ProvideFeedback(Const ACorrectClassification:TClassification;
       Const AIdentifier:TIdentifier):Boolean;overload;
