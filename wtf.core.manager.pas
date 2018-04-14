@@ -43,6 +43,8 @@ type
       PROP_MODELS = 'models';
       PROP_WEIGHT = 'weight';
       PROP_MODEL = 'model';
+      PROP_MAX_HIST = 'max_history';
+      PROP_LOCK = 'locked';
   private
     type
       TSpecializedVoteEntry = TVoteEntry<TData,TClassification>;
@@ -593,6 +595,20 @@ begin
   LArr:=TJSONArray.Create;
   LObj:=TJSONObject.Create;
   try
+    if not JSONPersist.StoreProperty(
+      PROP_MAX_HIST,
+      IntToStr(FMaxHistory),
+      ptNumber,
+      LError
+    ) then
+      raise Exception.Create(LError);
+    if not JSONPersist.StoreProperty(
+      PROP_LOCK,
+      BoolToStr(FLocked,True),
+      ptBool,
+      LError
+    ) then
+      raise Exception.Create(LError);
     for I := 0 to Pred(FModels.Collection.Count) do
     begin
       LModel:=FModels.Collection[I];
@@ -602,7 +618,12 @@ begin
       LObj.Add(PROP_MODEL,GetJSON(LModel.JSONPersist.ToJSON));
       LArr.Add(GetJSON(LObj.AsJSON));
     end;
-    if not JSONPersist.StoreProperty(PROP_MODELS,LArr.AsJSON,ptArray,LError) then
+    if not JSONPersist.StoreProperty(
+      PROP_MODELS,
+      LArr.AsJSON,
+      ptArray,
+      LError
+    ) then
       raise Exception.Create(LError);
   finally
     LArr.Free;
@@ -611,9 +632,32 @@ begin
 end;
 
 procedure TModelManagerImpl<TData,TClassification>.DoReload;
+var
+  LValue:String;
+  LType:TPersistType;
+  LError:String;
 begin
   inherited DoReload;
-  //here, we make no assumptions about persisting and leave it up to children
+  if not JSONPersist.PropertyStored(PROP_MAX_HIST) then
+    FMaxHistory:=0
+  else
+  begin
+    if not JSONPersist.FetchProperty(PROP_MAX_HIST,LValue,LType,LError) then
+      raise Exception.Create(LError);
+    FMaxHistory:=StrToIntDef(LValue,0);
+  end;
+  if not JSONPersist.PropertyStored(PROP_LOCK) then
+    FLocked:=false
+  else
+  begin
+    if not JSONPersist.FetchProperty(PROP_LOCK,LValue,LType,LError) then
+      raise Exception.Create(LError);
+    FLocked:=StrToBoolDef(LValue,false);
+  end;
+  //for now, we are leaving the reloading of models up to the designer of
+  //specialized wtf classes. Since we don't know how they choose to implement
+  //things down the road, it was thought to be better this way, but it may
+  //change in the future.
 end;
 
 function TModelManagerImpl<TData,TClassification>.GetModels: TModels<TData,TClassification>;
