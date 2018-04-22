@@ -514,21 +514,21 @@ var
 begin
   //when someone wants to classify, we need to grab the identifier as the
   //key to a "batch" of classifications
-  if AMessage.PublicationType=cpPreClassify then
+  if AMessage^.PublicationType=cpPreClassify then
   begin
     LEntries:=TVoteEntries.Create(True);
     //respect max history of classifications if asked to
     if (FMaxHistory>0) and (Succ(Cardinal(FVoteMap.Count))>FMaxHistory) then
       FVoteMap.Delete(0);
     //capture the identifier our classifier generated and use it as a key
-    FVoteMap.Add(AMessage.ID.ToString,LEntries);
+    FVoteMap.Add(AMessage^.ID.ToString,LEntries);
   end
-  else if AMessage.PublicationType=cpAlterClassify then
+  else if AMessage^.PublicationType=cpAlterClassify then
   begin
     if not FVoteMap.Sorted then
       FVoteMap.Sorted:=True;
     //need to make sure we still have the identifier
-    if not FVoteMap.Find(AMessage.ID.ToString, I) then
+    if not FVoteMap.Find(AMessage^.ID.ToString, I) then
       Exit;
     LEntries:=FVoteMap.Data[I];
     //regardless of whatever the initialized classifier spits out as default
@@ -544,8 +544,11 @@ begin
       );
       LEntries.Add(LEntry);
     end;
+    if LEntries.Count<1 then
+      raise Exception.Create('classification cannot proceed since no votes were recorded');
     //now according to weight, we will get the aggregate response
-    AMessage.Classification:=GetWeightedClassification(LEntries);
+    LClassification:=GetWeightedClassification(LEntries);
+    AMessage^.Classification:=LClassification;
   end;
 end;
 
