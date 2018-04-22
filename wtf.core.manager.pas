@@ -573,7 +573,6 @@ begin
   //on a clear, we need to get rid of any tracking info, and clear our own feeder
   if AMessage=fpPostClear then
   begin
-    FVoteMap.Clear;
     //before internal clearing, unsubscribe first
     FDataFeeder.Publisher.Remove(FDataFeederSubscriber,fpPostClear);
     FDataFeeder.Clear;
